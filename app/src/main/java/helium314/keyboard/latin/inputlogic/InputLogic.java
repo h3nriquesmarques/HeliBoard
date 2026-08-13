@@ -1934,6 +1934,28 @@ public final class InputLogic {
      *
      * @param inputTransaction The transaction in progress.
      */
+    /**
+     * Reverts the last autocorrection, restoring exactly what the user typed.
+     * Same mechanism backspace uses; NOT KeyCode.UNDO (which sends Ctrl+Z to the app).
+     */
+    public boolean revertLastAutocorrect(final SettingsValues settingsValues, final CapsMode keyboardCapsMode) {
+        if (!mLastComposedWord.canRevertCommit()) return false;
+        if (mWordComposer.isComposingWord()) return false;
+        final InputTransaction inputTransaction = new InputTransaction(settingsValues,
+                Event.createSoftwareKeypressEvent(KeyCode.DELETE, 0,
+                        Constants.NOT_A_COORDINATE, Constants.NOT_A_COORDINATE, false),
+                SystemClock.uptimeMillis(), mSpaceState,
+                getActualCapsMode(settingsValues, keyboardCapsMode));
+        mConnection.beginBatchEdit();
+        try {
+            revertCommit(inputTransaction);
+        } finally {
+            mConnection.endBatchEdit();
+        }
+        mLatinIME.mHandler.postUpdateSuggestionStrip(SuggestedWords.INPUT_STYLE_TYPING);
+        return true;
+    }
+
     private void revertCommit(final InputTransaction inputTransaction) {
         final CharSequence originallyTypedWord = mLastComposedWord.mTypedWord;
         final CharSequence committedWord = mLastComposedWord.mCommittedWord;

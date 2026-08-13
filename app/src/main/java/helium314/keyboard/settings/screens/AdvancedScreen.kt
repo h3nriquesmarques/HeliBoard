@@ -113,12 +113,31 @@ fun createAdvancedSettings(context: Context) = listOf(
             description = { stringResource(R.string.abbreviation_unit_milliseconds, it.toString()) }
         )
     },
+    Setting(context, Settings.PREF_LETTER_SWIPE, R.string.letter_swipe) {
+        SwitchPreference(it, Defaults.PREF_LETTER_SWIPE)
+    },
+    Setting(context, Settings.PREF_LETTER_SWIPE_LEFT, R.string.letter_swipe_left) {
+        ListPreference(it, letterSwipeItems(), Defaults.PREF_LETTER_SWIPE_LEFT)
+    },
+    Setting(context, Settings.PREF_LETTER_SWIPE_RIGHT, R.string.letter_swipe_right) {
+        ListPreference(it, letterSwipeItems(), Defaults.PREF_LETTER_SWIPE_RIGHT)
+    },
+    Setting(context, Settings.PREF_LETTER_SWIPE_UP, R.string.letter_swipe_up) {
+        ListPreference(it, letterSwipeItems(), Defaults.PREF_LETTER_SWIPE_UP)
+    },
+    Setting(context, Settings.PREF_LETTER_SWIPE_DOWN, R.string.letter_swipe_down) {
+        ListPreference(it, letterSwipeItems(), Defaults.PREF_LETTER_SWIPE_DOWN)
+    },
     Setting(context, Settings.PREF_SPACE_HORIZONTAL_SWIPE, R.string.show_horizontal_space_swipe) {
         val items = listOf(
             stringResource(R.string.space_swipe_move_cursor_entry) to KeyboardActionListener.SwipeAction.MOVE_CURSOR.name,
             stringResource(R.string.switch_language) to KeyboardActionListener.SwipeAction.SWITCH_LANGUAGE.name,
             stringResource(R.string.space_swipe_toggle_numpad_entry) to KeyboardActionListener.SwipeAction.TOGGLE_NUMPAD.name,
             stringResource(R.string.space_swipe_toggle_dpad_entry) to KeyboardActionListener.SwipeAction.TOGGLE_DPAD.name,
+            stringResource(R.string.space_swipe_insert_space_entry) to KeyboardActionListener.SwipeAction.INSERT_SPACE.name,
+            stringResource(R.string.space_swipe_delete_word_entry) to KeyboardActionListener.SwipeAction.DELETE_WORD.name,
+            stringResource(R.string.space_swipe_accept_suggestion_entry) to KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION.name,
+            stringResource(R.string.space_swipe_undo_autocorrect_entry) to KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT.name,
             stringResource(R.string.action_none) to KeyboardActionListener.SwipeAction.NONE.name,
         )
         ListPreference(it, items, Defaults.PREF_SPACE_HORIZONTAL_SWIPE)
@@ -131,6 +150,10 @@ fun createAdvancedSettings(context: Context) = listOf(
             stringResource(R.string.space_swipe_toggle_dpad_entry) to KeyboardActionListener.SwipeAction.TOGGLE_DPAD.name,
             stringResource(R.string.space_swipe_hide_keyboard_entry) to KeyboardActionListener.SwipeAction.HIDE_KEYBOARD.name,
             stringResource(R.string.space_swipe_touchpad_mode_entry) to KeyboardActionListener.SwipeAction.TOUCHPAD_MODE.name,
+            stringResource(R.string.space_swipe_insert_space_entry) to KeyboardActionListener.SwipeAction.INSERT_SPACE.name,
+            stringResource(R.string.space_swipe_delete_word_entry) to KeyboardActionListener.SwipeAction.DELETE_WORD.name,
+            stringResource(R.string.space_swipe_accept_suggestion_entry) to KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION.name,
+            stringResource(R.string.space_swipe_undo_autocorrect_entry) to KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT.name,
             stringResource(R.string.action_none) to KeyboardActionListener.SwipeAction.NONE.name,
         )
         ListPreference(it, items, Defaults.PREF_SPACE_VERTICAL_SWIPE)
@@ -288,3 +311,14 @@ private fun Preview() {
         }
     }
 }
+
+@Composable
+private fun letterSwipeItems() = listOf(
+    stringResource(R.string.space_swipe_insert_space_entry) to KeyboardActionListener.SwipeAction.INSERT_SPACE.name,
+    stringResource(R.string.space_swipe_delete_word_entry) to KeyboardActionListener.SwipeAction.DELETE_WORD.name,
+    stringResource(R.string.space_swipe_accept_suggestion_entry) to KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION.name,
+    stringResource(R.string.space_swipe_undo_autocorrect_entry) to KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT.name,
+    stringResource(R.string.space_swipe_hide_keyboard_entry) to KeyboardActionListener.SwipeAction.HIDE_KEYBOARD.name,
+    stringResource(R.string.switch_language) to KeyboardActionListener.SwipeAction.SWITCH_LANGUAGE.name,
+    stringResource(R.string.action_none) to KeyboardActionListener.SwipeAction.NONE.name,
+)

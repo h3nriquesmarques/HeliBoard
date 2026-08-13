@@ -920,6 +920,16 @@ New dictionary:
     <string name="space_swipe_toggle_numpad_entry">Toggle numpad</string>
     <!-- Option to toggle the D-pad when swiping the spacebar -->
     <string name="space_swipe_toggle_dpad_entry">Toggle D-pad</string>
+    <!-- Fleksy-style swipe actions -->
+    <string name="space_swipe_insert_space_entry">Insert space</string>
+    <string name="letter_swipe">Letter swipe gestures</string>
+    <string name="letter_swipe_left">Letter swipe: left</string>
+    <string name="letter_swipe_right">Letter swipe: right</string>
+    <string name="letter_swipe_up">Letter swipe: up</string>
+    <string name="letter_swipe_down">Letter swipe: down</string>
+    <string name="space_swipe_delete_word_entry">Delete word</string>
+    <string name="space_swipe_accept_suggestion_entry">Accept suggestion</string>
+    <string name="space_swipe_undo_autocorrect_entry">Undo autocorrect</string>
     <!-- Option to hide the keyboard when swiping the spacebar -->
     <string name="space_swipe_hide_keyboard_entry">Hide keyboard</string>
     <!-- Option to use touchpad when swiping the spacebar -->

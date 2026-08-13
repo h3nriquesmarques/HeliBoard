@@ -169,6 +169,8 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     private boolean mIsAllowedDraggingFinger;
     // true if a keyswipe gesture is enabled and warranted.
     private boolean mKeySwipeAllowed = false;
+    private boolean mLetterSwipeFired = false;
+    private static final int sLetterSwipeThreshold = KtxKt.dpToPx(28, Resources.getSystem());
     private static boolean sInKeySwipe = false;
 
     // Touchpad mode for cursor control
@@ -769,7 +771,10 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             case Constants.CODE_SPACE -> sv.mSpaceSwipeHorizontal != KeyboardActionListener.SwipeAction.NONE
                     || sv.mSpaceSwipeVertical != KeyboardActionListener.SwipeAction.NONE;
             case KeyCode.DELETE -> sv.mDeleteSwipeEnabled;
-            default -> false;
+            // Letter keys become swipers only when letter swipe is enabled. Note this
+            // also disables gesture typing for that touch (see mIsDetectingGesture in
+            // onDownEvent) -- the two are mutually exclusive by construction for now.
+            default -> sv.mLetterSwipeEnabled && Character.isLetter(code);
         };
     }
 
@@ -933,7 +938,10 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
 
     private boolean oneShotSwipe(KeyboardActionListener.SwipeAction swipeSetting) {
         return switch (swipeSetting) {
-            case NONE, TOGGLE_NUMPAD, TOGGLE_DPAD, HIDE_KEYBOARD -> true;
+            // Fleksy-style actions fire exactly once per swipe: repeating them
+            // every sPointerStep would e.g. delete the whole line in one drag.
+            case NONE, TOGGLE_NUMPAD, TOGGLE_DPAD, HIDE_KEYBOARD,
+                 INSERT_SPACE, DELETE_WORD, ACCEPT_SUGGESTION, UNDO_AUTOCORRECT -> true;
             default -> false;
         };
     }
@@ -945,7 +953,13 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         // see https://github.com/openboard-team/openboard/issues/411
         // delete swipe is excluded because it already has a distance threshold,
         // see https://github.com/openboard-team/openboard/pull/566
-        if (code != KeyCode.DELETE && SystemClock.elapsedRealtime() < mStartTime + fastTypingTimeout && sTypingTimeRecorder.isInFastTyping(eventTime))
+        // Letter swipe is excluded for the same reason as delete swipe: it has its own
+        // distance threshold. It also *must* be excluded, because the most common Fleksy
+        // gesture (swipe right for space) happens immediately after typing a word, i.e.
+        // always while the fast-typing flag is set.
+        final boolean hasOwnDistanceThreshold = code == KeyCode.DELETE
+                || (sv.mLetterSwipeEnabled && Character.isLetter(code));
+        if (!hasOwnDistanceThreshold && SystemClock.elapsedRealtime() < mStartTime + fastTypingTimeout && sTypingTimeRecorder.isInFastTyping(eventTime))
             return;
         if (code == Constants.CODE_SPACE) {
             int dX = x - mStartX;
@@ -978,6 +992,27 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
                     mStartX += stepsX * sPointerStep;
                 }
             }
+        } else if (sv.mLetterSwipeEnabled && Character.isLetter(code)) {
+            // Fleksy-style directional flick from a letter key. One-shot: the first
+            // direction that clears the threshold wins and nothing else fires until
+            // the finger is lifted.
+            if (mLetterSwipeFired) return;
+            final int dX = x - mStartX;
+            final int dY = y - mStartY;
+            final int threshold = sLetterSwipeThreshold;
+            final KeyboardActionListener.SwipeAction action;
+            if (abs(dX) >= threshold && abs(dX) > abs(dY)) {
+                action = dX > 0 ? sv.mLetterSwipeRight : sv.mLetterSwipeLeft;
+                mInHorizontalSwipe = true;
+            } else if (abs(dY) >= threshold && abs(dY) > abs(dX)) {
+                action = dY < 0 ? sv.mLetterSwipeUp : sv.mLetterSwipeDown;
+                mInVerticalSwipe = true;
+            } else {
+                return;
+            }
+            sTimerProxy.cancelKeyTimersOf(this);
+            mLetterSwipeFired = true;
+            sListener.onKeySwipeAction(action);
         } else if (code == KeyCode.DELETE) {
             // Delete slider
             int steps = (x - mStartX) / sPointerStep;
@@ -1102,6 +1137,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (mKeySwipeAllowed) {
             mKeySwipeAllowed = false;
             sInKeySwipe = false;
+            mLetterSwipeFired = false;
 
             // Touchpad mode
             mTouchpadHandler.disableTouchpadMode();
@@ -1197,6 +1233,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (mKeySwipeAllowed) {
             mKeySwipeAllowed = false;
             sInKeySwipe = false;
+            mLetterSwipeFired = false;
         }
     }
 
@@ -1342,6 +1379,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (mKeySwipeAllowed) {
             mKeySwipeAllowed = false;
             sInKeySwipe = false;
+            mLetterSwipeFired = false;
         }
         mIsDetectingGesture = false;
         final int nextRepeatCount = repeatCount + 1;

@@ -121,13 +121,17 @@ public interface KeyboardActionListener {
     void toggleLayout(LayoutDirective.Utility layout, int autoCapsFlags, @Nullable RecapitalizeMode recapitalizeMode);
     void onLongPressAlphaSymbolForNumpad();
 
+    /** Fires a one-shot SwipeAction, used by directional flicks on letter keys. */
+    void onKeySwipeAction(SwipeAction action);
+
     void onMoveDeletePointer(int steps);
     void onUpWithDeletePointerActive();
     void resetMetaState();
 
     KeyboardActionListener EMPTY_LISTENER = new Adapter();
 
-    enum SwipeAction { NONE, MOVE_CURSOR, SWITCH_LANGUAGE, TOGGLE_NUMPAD, TOGGLE_DPAD, HIDE_KEYBOARD, TOUCHPAD_MODE }
+    enum SwipeAction { NONE, MOVE_CURSOR, SWITCH_LANGUAGE, TOGGLE_NUMPAD, TOGGLE_DPAD, HIDE_KEYBOARD, TOUCHPAD_MODE,
+            INSERT_SPACE, DELETE_WORD, ACCEPT_SUGGESTION, UNDO_AUTOCORRECT }
     enum CustomAction { SHOW_INPUT_METHOD_PICKER, TOUCHPAD_ON, TOUCHPAD_OFF, PERFORM_HAPTIC }
 
     class Adapter implements KeyboardActionListener {
@@ -143,6 +147,8 @@ public interface KeyboardActionListener {
         public boolean onKeyUp(int keyCode, KeyEvent keyEvent) { return false; }
         @Override
         public void onCodeInput(int primaryCode, int x, int y, boolean isKeyRepeat) {}
+        @Override
+        public void onKeySwipeAction(SwipeAction action) {}
         @Override
         public void onTextInput(String text) {}
         @Override

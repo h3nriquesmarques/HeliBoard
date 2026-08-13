@@ -117,6 +117,11 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_SPACE_HORIZONTAL_SWIPE = "horizontal_space_swipe";
     public static final String PREF_SPACE_VERTICAL_SWIPE = "vertical_space_swipe";
     public static final String PREF_DELETE_SWIPE = "delete_swipe";
+    public static final String PREF_LETTER_SWIPE = "letter_swipe";
+    public static final String PREF_LETTER_SWIPE_LEFT = "letter_swipe_left";
+    public static final String PREF_LETTER_SWIPE_RIGHT = "letter_swipe_right";
+    public static final String PREF_LETTER_SWIPE_UP = "letter_swipe_up";
+    public static final String PREF_LETTER_SWIPE_DOWN = "letter_swipe_down";
     public static final String PREF_AUTOSPACE_AFTER_PUNCTUATION = "autospace_after_punctuation";
     public static final String PREF_AUTOSPACE_AFTER_SUGGESTION = "autospace_after_suggestion";
     public static final String PREF_AUTOSPACE_AFTER_GESTURE_TYPING = "autospace_after_gesture_typing";
@@ -352,6 +357,16 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
 
     public static ToolbarMode readToolbarMode(final SharedPreferences prefs) {
         return ToolbarMode.valueOf(prefs.getString(PREF_TOOLBAR_MODE, Defaults.PREF_TOOLBAR_MODE));
+    }
+
+    /** Reads a SwipeAction stored under an arbitrary key, falling back to NONE if unparsable. */
+    public static KeyboardActionListener.SwipeAction readSwipeAction(SharedPreferences prefs, String key, String defaultValue) {
+        try {
+            String value = prefs.getString(key, defaultValue);
+            return KeyboardActionListener.SwipeAction.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return KeyboardActionListener.SwipeAction.NONE;
+        }
     }
 
     public static KeyboardActionListener.SwipeAction readHorizontalSpaceSwipe(SharedPreferences prefs) {

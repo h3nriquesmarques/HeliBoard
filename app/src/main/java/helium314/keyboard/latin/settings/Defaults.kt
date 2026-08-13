@@ -106,6 +106,15 @@ object Defaults {
     @JvmField
     val PREF_SPACE_VERTICAL_SWIPE = KeyboardActionListener.SwipeAction.NONE.name
     const val PREF_DELETE_SWIPE = true
+    const val PREF_LETTER_SWIPE = false
+    @JvmField
+    val PREF_LETTER_SWIPE_LEFT = KeyboardActionListener.SwipeAction.DELETE_WORD.name
+    @JvmField
+    val PREF_LETTER_SWIPE_RIGHT = KeyboardActionListener.SwipeAction.INSERT_SPACE.name
+    @JvmField
+    val PREF_LETTER_SWIPE_UP = KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION.name
+    @JvmField
+    val PREF_LETTER_SWIPE_DOWN = KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT.name
     const val PREF_AUTOSPACE_AFTER_PUNCTUATION = false
     const val PREF_AUTOSPACE_AFTER_SUGGESTION = true
     const val PREF_AUTOSPACE_AFTER_GESTURE_TYPING = true

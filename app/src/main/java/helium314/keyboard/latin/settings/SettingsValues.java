@@ -87,6 +87,11 @@ public class SettingsValues {
     public final int mTouchpadSensitivity;
     public final boolean mTouchpadEdgeScroll;
     public final boolean mDeleteSwipeEnabled;
+    public final boolean mLetterSwipeEnabled;
+    public final KeyboardActionListener.SwipeAction mLetterSwipeLeft;
+    public final KeyboardActionListener.SwipeAction mLetterSwipeRight;
+    public final KeyboardActionListener.SwipeAction mLetterSwipeUp;
+    public final KeyboardActionListener.SwipeAction mLetterSwipeDown;
     public final boolean mAutospaceAfterPunctuation;
     public final boolean mAutospaceAfterSuggestion;
     public final boolean mAutospaceAfterGestureTyping;
@@ -276,6 +281,11 @@ public class SettingsValues {
             Defaults.PREF_TOUCHPAD_SENSITIVITY);
         mTouchpadEdgeScroll = prefs.getBoolean(Settings.PREF_TOUCHPAD_EDGE_SCROLL, Defaults.PREF_TOUCHPAD_EDGE_SCROLL);
         mDeleteSwipeEnabled = prefs.getBoolean(Settings.PREF_DELETE_SWIPE, Defaults.PREF_DELETE_SWIPE);
+        mLetterSwipeEnabled = prefs.getBoolean(Settings.PREF_LETTER_SWIPE, Defaults.PREF_LETTER_SWIPE);
+        mLetterSwipeLeft = Settings.readSwipeAction(prefs, Settings.PREF_LETTER_SWIPE_LEFT, Defaults.PREF_LETTER_SWIPE_LEFT);
+        mLetterSwipeRight = Settings.readSwipeAction(prefs, Settings.PREF_LETTER_SWIPE_RIGHT, Defaults.PREF_LETTER_SWIPE_RIGHT);
+        mLetterSwipeUp = Settings.readSwipeAction(prefs, Settings.PREF_LETTER_SWIPE_UP, Defaults.PREF_LETTER_SWIPE_UP);
+        mLetterSwipeDown = Settings.readSwipeAction(prefs, Settings.PREF_LETTER_SWIPE_DOWN, Defaults.PREF_LETTER_SWIPE_DOWN);
         mAutospaceAfterPunctuation = prefs.getBoolean(Settings.PREF_AUTOSPACE_AFTER_PUNCTUATION, Defaults.PREF_AUTOSPACE_AFTER_PUNCTUATION);
         mAutospaceAfterSuggestion = prefs.getBoolean(Settings.PREF_AUTOSPACE_AFTER_SUGGESTION, Defaults.PREF_AUTOSPACE_AFTER_SUGGESTION);
         mAutospaceAfterGestureTyping = prefs.getBoolean(Settings.PREF_AUTOSPACE_AFTER_GESTURE_TYPING, Defaults.PREF_AUTOSPACE_AFTER_GESTURE_TYPING);

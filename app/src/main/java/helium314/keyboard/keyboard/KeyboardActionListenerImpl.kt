@@ -19,6 +19,7 @@ import helium314.keyboard.latin.AudioAndHapticFeedbackManager
 import helium314.keyboard.latin.EmojiAltPhysicalKeyDetector
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.RichInputMethodManager
+import helium314.keyboard.latin.SuggestedWords
 import helium314.keyboard.latin.common.Constants
 import helium314.keyboard.latin.common.InputPointers
 import helium314.keyboard.latin.common.combiningRange
@@ -205,6 +206,10 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
             toggleLayout(LayoutDirective.Utility.DPAD, latinIME.currentAutoCapsState, latinIME.currentRecapitalizeState)
             true
         }
+        KeyboardActionListener.SwipeAction.INSERT_SPACE -> onInsertSpace()
+        KeyboardActionListener.SwipeAction.DELETE_WORD -> onDeleteWord()
+        KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION -> onAcceptSuggestion()
+        KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT -> onUndoAutocorrect()
         else -> false
     }
 
@@ -236,6 +241,10 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
                 false
             }
         }
+        KeyboardActionListener.SwipeAction.INSERT_SPACE -> onInsertSpace()
+        KeyboardActionListener.SwipeAction.DELETE_WORD -> onDeleteWord()
+        KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION -> onAcceptSuggestion()
+        KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT -> onUndoAutocorrect()
         else -> false
     }
 
@@ -243,6 +252,75 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
         initialSubtype = null
         subtypeSwitchCount = 0
     }
+
+    override fun onKeySwipeAction(action: KeyboardActionListener.SwipeAction) {
+        when (action) {
+            KeyboardActionListener.SwipeAction.INSERT_SPACE -> onInsertSpace()
+            KeyboardActionListener.SwipeAction.DELETE_WORD -> onDeleteWord()
+            KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION -> onAcceptSuggestion()
+            KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT -> onUndoAutocorrect()
+            KeyboardActionListener.SwipeAction.HIDE_KEYBOARD -> latinIME.requestHideSelf(0)
+            KeyboardActionListener.SwipeAction.SWITCH_LANGUAGE -> onLanguageSlide(1)
+            KeyboardActionListener.SwipeAction.TOGGLE_NUMPAD ->
+                toggleLayout(LayoutDirective.Utility.NUMPAD, latinIME.currentAutoCapsState, latinIME.currentRecapitalizeState)
+            KeyboardActionListener.SwipeAction.TOGGLE_DPAD ->
+                toggleLayout(LayoutDirective.Utility.DPAD, latinIME.currentAutoCapsState, latinIME.currentRecapitalizeState)
+            else -> Unit
+        }
+    }
+
+    // --- Fleksy-style swipe actions -------------------------------------
+    // All of these are one-shot (see PointerTracker.oneShotSwipe): they run
+    // once per swipe regardless of how far the finger travels.
+
+    private fun onInsertSpace(): Boolean {
+        latinIME.onCodeInput(
+            Constants.CODE_SPACE,
+            Constants.NOT_A_COORDINATE,
+            Constants.NOT_A_COORDINATE,
+            false
+        )
+        return true
+    }
+
+    /** Deletes the word before the cursor, plus any whitespace trailing it. */
+    private fun onDeleteWord(): Boolean {
+        if (connection.hasSelection()) {
+            // A selection is already an explicit range; just remove it.
+            latinIME.onCodeInput(KeyCode.DELETE, Constants.NOT_A_COORDINATE, Constants.NOT_A_COORDINATE, false)
+            return true
+        }
+        inputLogic.finishInput()
+        val before = connection.getTextBeforeCursor(DELETE_WORD_LOOKBEHIND, 0) ?: return false
+        if (before.isEmpty()) return false
+
+        var end = before.length
+        // Swallow whitespace directly before the cursor first, so a swipe after
+        // "hello world " removes "world " rather than only the space.
+        while (end > 0 && before[end - 1].isWhitespace()) end--
+        if (end == 0) {
+            // Only whitespace behind the cursor: remove it and stop.
+            connection.deleteTextBeforeCursor(before.length)
+            return true
+        }
+        var start = end
+        while (start > 0 && !before[start - 1].isWhitespace()) start--
+        connection.deleteTextBeforeCursor(before.length - start)
+        return true
+    }
+
+    /** Commits the suggestion the keyboard would have picked on space. */
+    private fun onAcceptSuggestion(): Boolean {
+        val suggestions = inputLogic.mSuggestedWords
+        if (suggestions.isEmpty) return false
+        val index = SuggestedWords.INDEX_OF_AUTO_CORRECTION
+        if (index >= suggestions.size()) return false
+        latinIME.pickSuggestionManually(suggestions.getInfo(index) ?: return false)
+        return true
+    }
+
+    private fun onUndoAutocorrect(): Boolean =
+        inputLogic.revertLastAutocorrect(Settings.getValues(), keyboardSwitcher.keyboardCapsMode)
 
     override fun toggleLayout(layout: LayoutDirective.Utility, autoCapsFlags: Int, recapitalizeMode: RecapitalizeMode?) {
         keyboardSwitcher.toggleLayout(layout, autoCapsFlags, recapitalizeMode)
@@ -508,6 +586,9 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
     }
 
     companion object {
+        /** How far back to look when deleting a word; longer words are rare. */
+        private const val DELETE_WORD_LOOKBEHIND = 64
+
         private enum class MetaPressState {
             UNSET, // default state, not active
             SET, // enabled without onPressKey (e.g. in popup)
