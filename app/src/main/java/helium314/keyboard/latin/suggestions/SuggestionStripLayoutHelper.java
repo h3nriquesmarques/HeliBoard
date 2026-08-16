@@ -51,7 +51,7 @@ import helium314.keyboard.latin.utils.ViewLayoutUtils;
 
 import java.util.ArrayList;
 
-final class SuggestionStripLayoutHelper {
+public final class SuggestionStripLayoutHelper {
     private static final int DEFAULT_SUGGESTIONS_COUNT_IN_STRIP = 3;
     private static final float DEFAULT_CENTER_SUGGESTION_PERCENTILE = 0.40f;
     private static final int DEFAULT_MAX_MORE_SUGGESTIONS_ROW = 2;
@@ -230,7 +230,7 @@ final class SuggestionStripLayoutHelper {
                 shouldOmitTypedWord, mCenterPositionInStrip, mTypedWordPositionWhenAutocorrect);
     }
 
-    static boolean shouldOmitTypedWord(final int inputStyle,
+    public static boolean shouldOmitTypedWord(final int inputStyle,
             final boolean gestureFloatingPreviewTextEnabled,
             final boolean shouldShowUiToAcceptTypedWord) {
         final boolean omitTypedWord = (inputStyle == SuggestedWords.INPUT_STYLE_TYPING)
@@ -239,7 +239,7 @@ final class SuggestionStripLayoutHelper {
         return shouldShowUiToAcceptTypedWord && omitTypedWord;
     }
 
-    static int getPositionInSuggestionStrip(final int indexInSuggestedWords,
+    public static int getPositionInSuggestionStrip(final int indexInSuggestedWords,
             final boolean willAutoCorrect, final boolean omitTypedWord,
             final int centerPositionInStrip, final int typedWordPositionWhenAutoCorrect) {
         if (omitTypedWord) {

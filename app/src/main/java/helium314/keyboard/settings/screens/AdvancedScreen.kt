@@ -137,6 +137,8 @@ fun createAdvancedSettings(context: Context) = listOf(
             stringResource(R.string.space_swipe_insert_space_entry) to KeyboardActionListener.SwipeAction.INSERT_SPACE.name,
             stringResource(R.string.space_swipe_delete_word_entry) to KeyboardActionListener.SwipeAction.DELETE_WORD.name,
             stringResource(R.string.space_swipe_accept_suggestion_entry) to KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION.name,
+    stringResource(R.string.swipe_cycle_suggestion_next_entry) to KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_NEXT.name,
+    stringResource(R.string.swipe_cycle_suggestion_prev_entry) to KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_PREV.name,
             stringResource(R.string.space_swipe_undo_autocorrect_entry) to KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT.name,
             stringResource(R.string.action_none) to KeyboardActionListener.SwipeAction.NONE.name,
         )
@@ -316,6 +318,8 @@ private fun Preview() {
 private fun letterSwipeItems() = listOf(
     stringResource(R.string.space_swipe_insert_space_entry) to KeyboardActionListener.SwipeAction.INSERT_SPACE.name,
     stringResource(R.string.space_swipe_delete_word_entry) to KeyboardActionListener.SwipeAction.DELETE_WORD.name,
+    stringResource(R.string.swipe_cycle_suggestion_next_entry) to KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_NEXT.name,
+    stringResource(R.string.swipe_cycle_suggestion_prev_entry) to KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_PREV.name,
     stringResource(R.string.space_swipe_accept_suggestion_entry) to KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION.name,
     stringResource(R.string.space_swipe_undo_autocorrect_entry) to KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT.name,
     stringResource(R.string.space_swipe_hide_keyboard_entry) to KeyboardActionListener.SwipeAction.HIDE_KEYBOARD.name,

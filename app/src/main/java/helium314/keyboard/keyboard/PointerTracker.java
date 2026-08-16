@@ -941,7 +941,8 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             // Fleksy-style actions fire exactly once per swipe: repeating them
             // every sPointerStep would e.g. delete the whole line in one drag.
             case NONE, TOGGLE_NUMPAD, TOGGLE_DPAD, HIDE_KEYBOARD,
-                 INSERT_SPACE, DELETE_WORD, ACCEPT_SUGGESTION, UNDO_AUTOCORRECT -> true;
+                 INSERT_SPACE, DELETE_WORD, ACCEPT_SUGGESTION, UNDO_AUTOCORRECT,
+                 CYCLE_SUGGESTION_NEXT, CYCLE_SUGGESTION_PREV -> true;
             default -> false;
         };
     }

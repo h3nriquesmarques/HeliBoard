@@ -1938,6 +1938,74 @@ public final class InputLogic {
      * Reverts the last autocorrection, restoring exactly what the user typed.
      * Same mechanism backspace uses; NOT KeyCode.UNDO (which sends Ctrl+Z to the app).
      */
+    /**
+     * Replaces the word currently being composed, without committing anything.
+     *
+     * This is the same mechanism gesture typing uses to preview a word: the composer holds
+     * the new word and the editor shows it as composing text, so whatever separator the user
+     * types next commits the cycled word. Cycling this way needs no commit/revert dance,
+     * which is what made the earlier implementation fragile.
+     *
+     * @return false if no word is being composed, in which case nothing was changed.
+     */
+    /** The word currently being composed, or null when nothing is being composed. */
+    public String composingWordOrNull() {
+        return mWordComposer.isComposingWord() ? mWordComposer.getTypedWord() : null;
+    }
+
+    public boolean setComposingWordForCycling(final SuggestedWordInfo chosen) {
+        if (!mWordComposer.isComposingWord()) return false;
+        if (chosen == null || TextUtils.isEmpty(chosen.mWord)) return false;
+        final String word = chosen.mWord;
+        mConnection.beginBatchEdit();
+        try {
+            mWordComposer.setBatchInputWord(word);
+            setComposingTextInternal(word, 1);
+            // Pin the chosen candidate as the autocorrection. Swapping the composing word
+            // kicks off a fresh suggestion round which sets its own autocorrection, and
+            // commitCurrentAutoCorrection prefers that over the typed word -- so without
+            // this the committed word was always the centre candidate, no matter which one
+            // the user cycled to.
+            mWordComposer.setAutoCorrection(chosen);
+        } finally {
+            mConnection.endBatchEdit();
+        }
+        return true;
+    }
+
+    /**
+     * Puts the word before the cursor back into composition so it can be cycled again.
+     *
+     * Used when the user swipes up right after committing with a space: the separator is
+     * removed so the cursor touches the word, then the normal "cursor touched a word" path
+     * resumes suggestions for it. The space comes back when the user swipes right again.
+     *
+     * @return false if there is nothing to reopen, in which case nothing was changed.
+     */
+    public boolean reopenLastWordForCycling(final SettingsValues settingsValues, final String script) {
+        if (mWordComposer.isComposingWord()) return false;
+        if (mConnection.hasSelection()) return false;
+        final CharSequence before = mConnection.getTextBeforeCursor(2, 0);
+        // Only meaningful directly after a space that follows a word.
+        if (before == null || before.length() < 2) return false;
+        if (before.charAt(1) != Constants.CODE_SPACE) return false;
+        if (Character.isWhitespace(before.charAt(0))) return false;
+        mConnection.beginBatchEdit();
+        try {
+            mConnection.deleteTextBeforeCursor(1);
+            mSpaceState = SpaceState.NONE;
+            restartSuggestionsOnWordTouchedByCursor(settingsValues, script);
+        } finally {
+            mConnection.endBatchEdit();
+        }
+        return mWordComposer.isComposingWord();
+    }
+
+    /** True when there is a word that suggestion cycling could replace. */
+    public boolean hasReplaceableWord() {
+        return mWordComposer.isComposingWord() || mLastComposedWord.canRevertCommit();
+    }
+
     public boolean revertLastAutocorrect(final SettingsValues settingsValues, final CapsMode keyboardCapsMode) {
         if (!mLastComposedWord.canRevertCommit()) return false;
         if (mWordComposer.isComposingWord()) return false;

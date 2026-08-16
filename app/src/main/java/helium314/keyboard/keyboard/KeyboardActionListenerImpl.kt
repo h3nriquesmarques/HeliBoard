@@ -20,6 +20,7 @@ import helium314.keyboard.latin.EmojiAltPhysicalKeyDetector
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.RichInputMethodManager
 import helium314.keyboard.latin.SuggestedWords
+import helium314.keyboard.latin.suggestions.SuggestionStripLayoutHelper
 import helium314.keyboard.latin.common.Constants
 import helium314.keyboard.latin.common.InputPointers
 import helium314.keyboard.latin.common.combiningRange
@@ -105,6 +106,8 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
     }
 
     override fun onCodeInput(primaryCode: Int, x: Int, y: Int, isKeyRepeat: Boolean) {
+        // Any real keypress invalidates the cycling snapshot.
+        resetSuggestionCycle()
         when (primaryCode) {
             KeyCode.TOGGLE_AUTOCORRECT -> return settings.toggleAutoCorrect()
             KeyCode.TOGGLE_INCOGNITO_MODE -> {
@@ -210,6 +213,8 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
         KeyboardActionListener.SwipeAction.DELETE_WORD -> onDeleteWord()
         KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION -> onAcceptSuggestion()
         KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT -> onUndoAutocorrect()
+        KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_NEXT -> onCycleSuggestion(1)
+        KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_PREV -> onCycleSuggestion(-1)
         else -> false
     }
 
@@ -245,6 +250,8 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
         KeyboardActionListener.SwipeAction.DELETE_WORD -> onDeleteWord()
         KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION -> onAcceptSuggestion()
         KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT -> onUndoAutocorrect()
+        KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_NEXT -> onCycleSuggestion(1)
+        KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_PREV -> onCycleSuggestion(-1)
         else -> false
     }
 
@@ -254,11 +261,20 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
     }
 
     override fun onKeySwipeAction(action: KeyboardActionListener.SwipeAction) {
+        // Any action other than cycling itself ends the cycling session. Gesture-inserted
+        // spaces do not go through the listener's onCodeInput, so without this the stale
+        // snapshot survived and the next cycle reverted/inserted against a dead list.
+        if (action != KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_NEXT
+            && action != KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_PREV) {
+            resetSuggestionCycle()
+        }
         when (action) {
             KeyboardActionListener.SwipeAction.INSERT_SPACE -> onInsertSpace()
             KeyboardActionListener.SwipeAction.DELETE_WORD -> onDeleteWord()
             KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION -> onAcceptSuggestion()
             KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT -> onUndoAutocorrect()
+            KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_NEXT -> onCycleSuggestion(1)
+            KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_PREV -> onCycleSuggestion(-1)
             KeyboardActionListener.SwipeAction.HIDE_KEYBOARD -> latinIME.requestHideSelf(0)
             KeyboardActionListener.SwipeAction.SWITCH_LANGUAGE -> onLanguageSlide(1)
             KeyboardActionListener.SwipeAction.TOGGLE_NUMPAD ->
@@ -267,6 +283,87 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
                 toggleLayout(LayoutDirective.Utility.DPAD, latinIME.currentAutoCapsState, latinIME.currentRecapitalizeState)
             else -> Unit
         }
+    }
+
+    // --- Suggestion cycling (Fleksy up/down) ----------------------------
+    // Fleksy had no "undo": if the wrong word came out you flicked down until
+    // the right one appeared. Cycling walks the suggestion list captured when
+    // cycling started, so the list does not shift under the user as each pick
+    // regenerates suggestions.
+
+    private var cycleList: List<SuggestedWords.SuggestedWordInfo> = emptyList()
+    private var cycleIndex = 0
+
+    internal fun resetSuggestionCycle() {
+        cycleList = emptyList()
+        cycleIndex = 0
+    }
+
+    /**
+     * The three candidates the strip actually draws, in left-to-right order.
+     *
+     * Deliberately limited to what is on screen. The engine does return more (up to
+     * MAX_SUGGESTIONS), but past the third candidate they are mostly noise -- typing "tud"
+     * offers Tudjman, Rus, Tudesco after Tudo -- so cycling into them is worse than not
+     * cycling at all. Three reliable candidates beat fourteen unreliable ones.
+     *
+     * Position is resolved with the strip's own layout helper rather than assumed, because
+     * the index order flips depending on whether an autocorrection is pending: the centre
+     * slot is the autocorrection when there is one, and the typed word when there is not.
+     */
+    private fun stripOrder(words: SuggestedWords): List<SuggestedWords.SuggestedWordInfo> {
+        val center = DEFAULT_SUGGESTIONS_IN_STRIP / 2
+        val typedWordPos = center - 1
+        val omitTypedWord = SuggestionStripLayoutHelper.shouldOmitTypedWord(
+            words.mInputStyle, Settings.getValues().mGestureFloatingPreviewTextEnabled, true)
+        return (0 until words.size())
+            .mapNotNull { index ->
+                val info = words.getInfo(index) ?: return@mapNotNull null
+                if (info.mWord.isNullOrEmpty()) return@mapNotNull null
+                val pos = SuggestionStripLayoutHelper.getPositionInSuggestionStrip(
+                    index, words.mWillAutoCorrect, omitTypedWord, center, typedWordPos)
+                if (pos in 0 until DEFAULT_SUGGESTIONS_IN_STRIP) pos to info else null
+            }
+            .sortedBy { it.first }
+            .map { it.second }
+            .distinctBy { it.mWord }
+    }
+
+    /**
+     * Moves to the neighbouring candidate on the strip: down goes right, up goes left,
+     * starting from the centre slot. Nothing is committed -- the composing word is swapped
+     * in place, so the next separator commits whatever is showing.
+     */
+    private fun onCycleSuggestion(delta: Int): Boolean {
+        if (cycleList.isEmpty()) {
+            // Nothing composing: if the user just committed a word with a space, swiping up
+            // reopens it for editing instead of doing nothing. Same gesture, decided by
+            // context -- cycle while writing, reopen right after committing.
+            if (delta < 0 && inputLogic.composingWordOrNull() == null) {
+                if (!inputLogic.reopenLastWordForCycling(settings.current, keyboardSwitcher.currentKeyboardScript))
+                    return false
+                return true
+            }
+            val words = inputLogic.mSuggestedWords
+            if (words.isEmpty || words.isPunctuationSuggestions) return false
+            val list = stripOrder(words)
+            if (list.size < 2) return false
+            cycleList = list
+            // Start at the centre slot: that is the word the keyboard would commit on space,
+            // and the one the user sees as "current".
+            cycleIndex = (DEFAULT_SUGGESTIONS_IN_STRIP / 2).coerceAtMost(list.size - 1)
+        }
+        val list = cycleList
+        val next = cycleIndex + delta
+        // Stop at the ends instead of wrapping: wrapping past the edge makes it impossible
+        // to tell where you are in a three-item list.
+        if (next !in list.indices) return false
+        if (!inputLogic.setComposingWordForCycling(list[next])) {
+            resetSuggestionCycle()
+            return false
+        }
+        cycleIndex = next
+        return true
     }
 
     // --- Fleksy-style swipe actions -------------------------------------
@@ -588,6 +685,8 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
     companion object {
         /** How far back to look when deleting a word; longer words are rare. */
         private const val DELETE_WORD_LOOKBEHIND = 64
+
+        private const val DEFAULT_SUGGESTIONS_IN_STRIP = 3
 
         private enum class MetaPressState {
             UNSET, // default state, not active

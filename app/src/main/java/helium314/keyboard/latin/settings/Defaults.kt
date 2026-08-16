@@ -112,9 +112,9 @@ object Defaults {
     @JvmField
     val PREF_LETTER_SWIPE_RIGHT = KeyboardActionListener.SwipeAction.INSERT_SPACE.name
     @JvmField
-    val PREF_LETTER_SWIPE_UP = KeyboardActionListener.SwipeAction.ACCEPT_SUGGESTION.name
+    val PREF_LETTER_SWIPE_UP = KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_PREV.name
     @JvmField
-    val PREF_LETTER_SWIPE_DOWN = KeyboardActionListener.SwipeAction.UNDO_AUTOCORRECT.name
+    val PREF_LETTER_SWIPE_DOWN = KeyboardActionListener.SwipeAction.CYCLE_SUGGESTION_NEXT.name
     const val PREF_AUTOSPACE_AFTER_PUNCTUATION = false
     const val PREF_AUTOSPACE_AFTER_SUGGESTION = true
     const val PREF_AUTOSPACE_AFTER_GESTURE_TYPING = true

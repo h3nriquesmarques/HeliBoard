@@ -1477,6 +1477,11 @@ public class LatinIME extends InputMethodService implements
         return null != mSuggestionStripView;
     }
 
+    /** Re-shows a previously captured suggestion list, used while cycling suggestions. */
+    public void showSuggestionsForCycling(final SuggestedWords suggestedWords) {
+        setSuggestedWords(suggestedWords);
+    }
+
     private void setSuggestedWords(final SuggestedWords suggestedWords) {
         final SettingsValues currentSettingsValues = mSettings.getCurrent();
         mInputLogic.setSuggestedWords(suggestedWords);
