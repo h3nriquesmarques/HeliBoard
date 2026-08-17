@@ -83,6 +83,10 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         val capsMode = getCapsModeForTyping(wordComposer, keyboard)
         val suggestionsContainer = ArrayList(suggestionResults)
         capitalizeAndAddTrailingSingleQuotes(suggestionsContainer, capsMode, trailingSingleQuotesCount, mDictionaryFacilitator.mainLocale)
+        if (!resultsArePredictions && typedWordString.isNotEmpty()) {
+            rerankByContext(suggestionsContainer, ngramContext, keyboard, inputStyleIfNotPrediction, settingsValuesForSuggestion)
+            rerankByPersonalVocabulary(suggestionsContainer)
+        }
         val capitalizedTypedWord = capitalize(typedWordString, capsMode, mDictionaryFacilitator.mainLocale)
 
         // store the original SuggestedWordInfo for typed word, as it will be removed
@@ -352,6 +356,110 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
     }
 
     /** get suggestions based on the current ngram context, with an empty typed word (that's what next word suggestions do)  */
+    /**
+     * Reorders candidates using the context, i.e. the words already typed.
+     *
+     * The spatial/unigram score alone answers "which word looks like what the finger did",
+     * which is why typing "tud" in Portuguese offers Tudjman, Rus and Tudesco right after
+     * Tudo: they are plausible shapes but implausible continuations. The next-word
+     * predictions for the current context already know that "tudo" follows "opa" and
+     * Tudjman follows nothing, so blending that in pushes the noise down.
+     *
+     * The blend is deliberately a bounded bonus rather than a replacement: the spatial score
+     * still decides, context only reshuffles candidates that were already close. Otherwise a
+     * strongly predicted word could win over what the user actually typed.
+     */
+    private fun rerankByContext(suggestions: ArrayList<SuggestedWordInfo>, ngramContext: NgramContext,
+                                keyboard: Keyboard, inputStyle: Int,
+                                settingsValuesForSuggestion: SettingsValuesForSuggestion) {
+        if (suggestions.size < 2) return
+        if (!ngramContext.isValid) return
+        val contextSuggestions = try {
+            getNextWordSuggestions(ngramContext, keyboard, inputStyle, settingsValuesForSuggestion)
+        } catch (e: Exception) {
+            return // never let reranking break typing
+        }
+        if (contextSuggestions.isEmpty()) return
+
+        // Rank within the context predictions, best first. Rank is used rather than the raw
+        // score because the two scores come from different scales.
+        val contextRank = HashMap<String, Int>(contextSuggestions.size)
+        contextSuggestions.sortedByDescending { it.mScore }.forEachIndexed { rank, info ->
+            contextRank.putIfAbsent(info.mWord, rank)
+        }
+
+        val topScore = suggestions.maxOf { it.mScore }
+        if (topScore <= 0) return
+        var changed = false
+        for (i in suggestions.indices) {
+            val info = suggestions[i]
+            val rank = contextRank[info.mWord] ?: continue
+            if (rank >= CONTEXT_RERANK_CONSIDERED) continue
+            // Bonus decays with rank and is capped at a fraction of the leading score, so
+            // context can promote a near-miss but not overturn a clear spatial winner.
+            val bonus = (topScore.toLong() * CONTEXT_RERANK_MAX_BONUS *
+                (CONTEXT_RERANK_CONSIDERED - rank) / CONTEXT_RERANK_CONSIDERED / 100).toInt()
+            if (bonus <= 0) continue
+            val boosted = info.mScore.toLong() + bonus
+            suggestions[i] = SuggestedWordInfo(info.mWord, info.mPrevWordsContext,
+                boosted.coerceAtMost(Int.MAX_VALUE.toLong() - 1).toInt(), info.mKindAndFlags,
+                info.mSourceDict, info.mIndexOfTouchPointOfSecondWord, info.mAutoCommitFirstWordConfidence)
+            changed = true
+        }
+        if (changed) suggestions.sortByDescending { it.mScore }
+    }
+
+    /**
+     * Boosts words that belong to the user rather than to the generic dictionary.
+     *
+     * Two different signals, each covering the other's blind spot:
+     *
+     * - The personal dictionary (TYPE_USER, fed by Android's user dictionary, which is where
+     *   words imported from another keyboard land) knows a word is legitimate for this user,
+     *   but stores every entry at the same fixed weight, so it cannot tell a slang term typed
+     *   daily from a name imported once and never used.
+     * - The history dictionary (TYPE_USER_HISTORY) has real frequencies, but only learns a
+     *   word after it has been typed here, so it is useless for vocabulary the keyboard has
+     *   not seen yet.
+     *
+     * A word backed by both gets the largest boost: declared as the user's *and* actually
+     * used. This is what the raw scores could not express -- measurements showed history
+     * already dominates once a word is known, so the gap being closed here is the cold start.
+     *
+     * The boost is capped like the context one, for the same reason: it must not overturn
+     * what the finger clearly typed.
+     */
+    private fun rerankByPersonalVocabulary(suggestions: ArrayList<SuggestedWordInfo>) {
+        if (suggestions.size < 2) return
+        val topScore = suggestions.maxOf { it.mScore }
+        if (topScore <= 0) return
+
+        // Words the history dictionary already knows, so personal-dictionary entries can be
+        // told apart by whether they are actually used.
+        val usedWords = HashSet<String>()
+        for (info in suggestions) {
+            if (info.mSourceDict?.mDictType == Dictionary.TYPE_USER_HISTORY) usedWords.add(info.mWord)
+        }
+
+        var changed = false
+        for (i in suggestions.indices) {
+            val info = suggestions[i]
+            val type = info.mSourceDict?.mDictType ?: continue
+            if (type != Dictionary.TYPE_USER) continue
+            // Personal dictionary entries carry no usage information of their own; the history
+            // dictionary supplies it.
+            val percent = if (info.mWord in usedWords) PERSONAL_USED_BONUS else PERSONAL_DECLARED_BONUS
+            val bonus = (topScore.toLong() * percent / 100)
+            if (bonus <= 0) continue
+            val boosted = (info.mScore.toLong() + bonus).coerceAtMost(Int.MAX_VALUE.toLong() - 1)
+            suggestions[i] = SuggestedWordInfo(info.mWord, info.mPrevWordsContext, boosted.toInt(),
+                info.mKindAndFlags, info.mSourceDict, info.mIndexOfTouchPointOfSecondWord,
+                info.mAutoCommitFirstWordConfidence)
+            changed = true
+        }
+        if (changed) suggestions.sortByDescending { it.mScore }
+    }
+
     private fun getNextWordSuggestions(ngramContext: NgramContext, keyboard: Keyboard, inputStyle: Int,
                                        settingsValuesForSuggestion: SettingsValuesForSuggestion): SuggestionResults {
         val cachedResults = nextWordSuggestionsCache[ngramContext]
@@ -364,6 +472,15 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
 
     companion object {
         private val TAG: String = Suggest::class.java.simpleName
+
+        /** How many of the context predictions are allowed to influence ranking. */
+        private const val CONTEXT_RERANK_CONSIDERED = 12
+        /** Largest context bonus, as a percentage of the leading candidate's score. */
+        private const val CONTEXT_RERANK_MAX_BONUS = 18
+        /** Bonus for a personal-dictionary word the user has actually typed here. */
+        private const val PERSONAL_USED_BONUS = 25
+        /** Bonus for a personal-dictionary word not yet seen in typing. */
+        private const val PERSONAL_DECLARED_BONUS = 12
 
         // Session id for {@link #getSuggestedWords(WordComposer,String,ProximityInfo,boolean,int)}.
         // We are sharing the same ID between typing and gesture to save RAM footprint.

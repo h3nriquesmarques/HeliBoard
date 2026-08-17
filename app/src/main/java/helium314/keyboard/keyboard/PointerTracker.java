@@ -1002,7 +1002,9 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             final int dY = y - mStartY;
             final int threshold = sLetterSwipeThreshold;
             final KeyboardActionListener.SwipeAction action;
-            if (abs(dX) >= threshold && abs(dX) > abs(dY)) {
+            // >= on the tie so a perfectly diagonal flick resolves to horizontal instead of
+            // falling through both branches and doing nothing.
+            if (abs(dX) >= threshold && abs(dX) >= abs(dY)) {
                 action = dX > 0 ? sv.mLetterSwipeRight : sv.mLetterSwipeLeft;
                 mInHorizontalSwipe = true;
             } else if (abs(dY) >= threshold && abs(dY) > abs(dX)) {
@@ -1136,6 +1138,14 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         }
 
         if (mKeySwipeAllowed) {
+            // Last chance to recognise a letter swipe. onKeySwipe only runs on move events,
+            // so a quick flick can lift the finger before any reported move crossed the
+            // threshold: the gesture silently became a normal keypress, which is why a
+            // missed "swipe right for space" glued the next word onto the previous one.
+            // Re-check against the final position here.
+            if (!mLetterSwipeFired && currentKey != null && !mInHorizontalSwipe && !mInVerticalSwipe) {
+                onKeySwipe(currentKey.getCode(), x, y, eventTime);
+            }
             mKeySwipeAllowed = false;
             sInKeySwipe = false;
             mLetterSwipeFired = false;
