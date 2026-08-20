@@ -23,6 +23,7 @@ import android.os.Debug;
 import android.os.Message;
 import android.os.Process;
 import android.util.PrintWriterPrinter;
+import android.util.SparseArray;
 import android.util.Printer;
 import android.view.KeyEvent;
 import android.view.View;
@@ -110,6 +111,8 @@ public class LatinIME extends InputMethodService implements
         SuggestionStripView.Listener, SuggestionStripViewAccessor,
         DictionaryFacilitator.DictionaryInitializationListener {
     static final String TAG = LatinIME.class.getSimpleName();
+    /** How many candidates contribute to the next-letter prediction. */
+    private static final int NEXT_LETTER_CANDIDATES = 6;
     private static final boolean TRACE = false;
 
     private static final int EXTENDED_TOUCHABLE_REGION_HEIGHT = 100;
@@ -1482,7 +1485,58 @@ public class LatinIME extends InputMethodService implements
         setSuggestedWords(suggestedWords);
     }
 
+    /**
+     * Derives "which letter is likely next" from the suggestions already computed and hands it
+     * to the keyboard, which uses it to enlarge the touch area of probable keys.
+     *
+     * The candidates are the cheapest possible source: they are recomputed after every
+     * keystroke anyway, and the character each one has at the position the user is about to
+     * type is exactly the prediction wanted. No extra dictionary lookup, no extra latency.
+     */
+    private void updateNextLetterBias(final SuggestedWords suggestedWords) {
+        final MainKeyboardView keyboardView = mKeyboardSwitcher.getMainKeyboardView();
+        if (keyboardView == null) return;
+        if (!mSettings.getCurrent().mDynamicTouchZones) {
+            keyboardView.setNextLetterBias(null);
+            return;
+        }
+        final int typedLength = mInputLogic.getComposingLength();
+        if (typedLength <= 0 || suggestedWords == null || suggestedWords.isEmpty()) {
+            keyboardView.setNextLetterBias(null);
+            return;
+        }
+        final SparseArray<Float> weights = new SparseArray<>();
+        float total = 0f;
+        final int count = Math.min(suggestedWords.size(), NEXT_LETTER_CANDIDATES);
+        for (int i = 0; i < count; i++) {
+            final SuggestedWords.SuggestedWordInfo info = suggestedWords.getInfo(i);
+            if (info == null) continue;
+            final String word = info.mWord;
+            if (word == null || word.length() <= typedLength) continue;
+            final char next = Character.toLowerCase(word.charAt(typedLength));
+            if (!Character.isLetter(next)) continue;
+            // Rank-based weight: the exact scores come from different scales, and only the
+            // relative ordering is meaningful here.
+            final float weight = 1f / (i + 1);
+            weights.put(next, weights.get(next, 0f) + weight);
+            total += weight;
+        }
+        if (total <= 0f || weights.size() == 0) {
+            keyboardView.setNextLetterBias(null);
+            return;
+        }
+        final SparseArray<Float> normalized = new SparseArray<>(weights.size());
+        for (int i = 0; i < weights.size(); i++) {
+            normalized.put(weights.keyAt(i), weights.valueAt(i) / total);
+        }
+        keyboardView.setNextLetterBias(normalized);
+    }
+
     private void setSuggestedWords(final SuggestedWords suggestedWords) {
+        updateNextLetterBias(suggestedWords);
+        if (mKeyboardActionListener instanceof KeyboardActionListenerImpl) {
+            ((KeyboardActionListenerImpl) mKeyboardActionListener).onSuggestionsUpdated(suggestedWords);
+        }
         final SettingsValues currentSettingsValues = mSettings.getCurrent();
         mInputLogic.setSuggestedWords(suggestedWords);
         // TODO: Modify this when we support suggestions with hard keyboard

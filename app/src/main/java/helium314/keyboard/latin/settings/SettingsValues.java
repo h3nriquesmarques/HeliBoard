@@ -88,6 +88,7 @@ public class SettingsValues {
     public final boolean mTouchpadEdgeScroll;
     public final boolean mDeleteSwipeEnabled;
     public final boolean mLetterSwipeEnabled;
+    public final boolean mDynamicTouchZones;
     public final KeyboardActionListener.SwipeAction mLetterSwipeLeft;
     public final KeyboardActionListener.SwipeAction mLetterSwipeRight;
     public final KeyboardActionListener.SwipeAction mLetterSwipeUp;
@@ -282,6 +283,7 @@ public class SettingsValues {
         mTouchpadEdgeScroll = prefs.getBoolean(Settings.PREF_TOUCHPAD_EDGE_SCROLL, Defaults.PREF_TOUCHPAD_EDGE_SCROLL);
         mDeleteSwipeEnabled = prefs.getBoolean(Settings.PREF_DELETE_SWIPE, Defaults.PREF_DELETE_SWIPE);
         mLetterSwipeEnabled = prefs.getBoolean(Settings.PREF_LETTER_SWIPE, Defaults.PREF_LETTER_SWIPE);
+        mDynamicTouchZones = prefs.getBoolean(Settings.PREF_DYNAMIC_TOUCH_ZONES, Defaults.PREF_DYNAMIC_TOUCH_ZONES);
         mLetterSwipeLeft = Settings.readSwipeAction(prefs, Settings.PREF_LETTER_SWIPE_LEFT, Defaults.PREF_LETTER_SWIPE_LEFT);
         mLetterSwipeRight = Settings.readSwipeAction(prefs, Settings.PREF_LETTER_SWIPE_RIGHT, Defaults.PREF_LETTER_SWIPE_RIGHT);
         mLetterSwipeUp = Settings.readSwipeAction(prefs, Settings.PREF_LETTER_SWIPE_UP, Defaults.PREF_LETTER_SWIPE_UP);

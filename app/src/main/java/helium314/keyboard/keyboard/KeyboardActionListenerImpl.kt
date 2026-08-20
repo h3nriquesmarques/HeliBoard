@@ -294,7 +294,40 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
     private var cycleList: List<SuggestedWords.SuggestedWordInfo> = emptyList()
     private var cycleIndex = 0
 
+    /** Set while waiting for the suggestions of a word just reopened by a swipe up. */
+    private var awaitingReopenCorrection = false
+
+    /**
+     * Called when fresh suggestions arrive, so a reopened word can be corrected as soon as
+     * there is something to correct it with.
+     */
+    fun onSuggestionsUpdated(words: SuggestedWords) {
+        if (!awaitingReopenCorrection) return
+        awaitingReopenCorrection = false
+        if (words.isEmpty || words.isPunctuationSuggestions) return
+        val composing = inputLogic.composingWordOrNull() ?: return
+        val list = stripOrder(words)
+        if (list.isEmpty()) return
+        cycleList = list
+        // A reopened word has no pending autocorrection, so the centre slot holds the word
+        // as written -- the wrong one, since that is why the user swiped back. Take the best
+        // candidate that actually differs from it: that is the correction being asked for.
+        val best = (0 until words.size())
+            .mapNotNull { words.getInfo(it) }
+            .firstOrNull { it.mWord != null && it.mWord.isNotEmpty() && it.mWord != composing && !it.isEmoji }
+        if (best == null) {
+            // Genuinely nothing to fix; leave the word open for editing.
+            cycleIndex = (DEFAULT_SUGGESTIONS_IN_STRIP / 2).coerceAtMost(list.size - 1)
+            return
+        }
+        if (!inputLogic.setComposingWordForCycling(best)) return
+        // Keep cycling anchored where the applied word sits on the strip.
+        cycleIndex = list.indexOfFirst { it.mWord == best.mWord }
+            .takeIf { it >= 0 } ?: (DEFAULT_SUGGESTIONS_IN_STRIP / 2).coerceAtMost(list.size - 1)
+    }
+
     internal fun resetSuggestionCycle() {
+        awaitingReopenCorrection = false
         cycleList = emptyList()
         cycleIndex = 0
     }
@@ -342,6 +375,12 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
             if (delta < 0 && inputLogic.composingWordOrNull() == null) {
                 if (!inputLogic.reopenLastWordForCycling(settings.current, keyboardSwitcher.currentKeyboardScript))
                     return false
+                // The word is reopened exactly as it was written -- which is the wrong word,
+                // since that is why the user swiped back. Applying the best candidate is the
+                // point of the gesture: it means "fix this", not "hand it back to me".
+                // Suggestions for the reopened word are computed asynchronously, so this is
+                // finished in onSuggestionsUpdated once they arrive.
+                awaitingReopenCorrection = true
                 return true
             }
             val words = inputLogic.mSuggestedWords

@@ -118,6 +118,7 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final String PREF_SPACE_VERTICAL_SWIPE = "vertical_space_swipe";
     public static final String PREF_DELETE_SWIPE = "delete_swipe";
     public static final String PREF_LETTER_SWIPE = "letter_swipe";
+    public static final String PREF_DYNAMIC_TOUCH_ZONES = "dynamic_touch_zones";
     public static final String PREF_LETTER_SWIPE_LEFT = "letter_swipe_left";
     public static final String PREF_LETTER_SWIPE_RIGHT = "letter_swipe_right";
     public static final String PREF_LETTER_SWIPE_UP = "letter_swipe_up";

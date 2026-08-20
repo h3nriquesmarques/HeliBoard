@@ -116,6 +116,9 @@ fun createAdvancedSettings(context: Context) = listOf(
     Setting(context, Settings.PREF_LETTER_SWIPE, R.string.letter_swipe) {
         SwitchPreference(it, Defaults.PREF_LETTER_SWIPE)
     },
+    Setting(context, Settings.PREF_DYNAMIC_TOUCH_ZONES, R.string.dynamic_touch_zones) {
+        SwitchPreference(it, Defaults.PREF_DYNAMIC_TOUCH_ZONES)
+    },
     Setting(context, Settings.PREF_LETTER_SWIPE_LEFT, R.string.letter_swipe_left) {
         ListPreference(it, letterSwipeItems(), Defaults.PREF_LETTER_SWIPE_LEFT)
     },

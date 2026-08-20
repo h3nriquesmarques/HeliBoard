@@ -96,6 +96,8 @@ public final class InputLogic {
     private int mSpaceState;
     // Never null
     public SuggestedWords mSuggestedWords = SuggestedWords.getEmptyInstance();
+    /** True while a candidate chosen by a swipe gesture must survive suggestion updates. */
+    private boolean mHasPinnedCycledWord = false;
     public Suggest mSuggest; // non-final for active gesture data gathering, revert when data gathering phase is done (end of 2026 latest)
     public DictionaryFacilitator mDictionaryFacilitator; // non-final for active gesture data gathering, revert when data gathering phase is done (end of 2026 latest)
     private SingleDictionaryFacilitator mEmojiDictionaryFacilitator;
@@ -645,7 +647,7 @@ public final class InputLogic {
     // TODO: on the long term, this method should become private, but it will be difficult.
     // Especially, how do we deal with InputMethodService.onDisplayCompletions?
     public void setSuggestedWords(final SuggestedWords suggestedWords) {
-        if (!suggestedWords.isEmpty()) {
+        if (!suggestedWords.isEmpty() && !mHasPinnedCycledWord) {
             final SuggestedWordInfo suggestedWordInfo;
             if (suggestedWords.mWillAutoCorrect) {
                 suggestedWordInfo = suggestedWords.getInfo(SuggestedWords.INDEX_OF_AUTO_CORRECTION);
@@ -1109,6 +1111,8 @@ public final class InputLogic {
         enterInlineEmojiSearchIfNeeded(codePoint, settingsValues);
 
         if (isComposingWord) {
+            // Typing changes the word, so any pinned gesture choice no longer applies.
+            mHasPinnedCycledWord = false;
             mWordComposer.applyProcessedEvent(event);
             // If it's the first letter, make note of auto-caps state
             if (mWordComposer.isSingleLetter()) {
@@ -1967,6 +1971,12 @@ public final class InputLogic {
             // this the committed word was always the centre candidate, no matter which one
             // the user cycled to.
             mWordComposer.setAutoCorrection(chosen);
+            // Swapping the composing word starts a fresh suggestions round, and
+            // setSuggestedWords would then overwrite this pin with the recomputed
+            // autocorrection -- or, when there is none, with the originally typed word. That
+            // is what made a corrected word revert on commit. Hold the pin until the word
+            // stops being composed.
+            mHasPinnedCycledWord = true;
         } finally {
             mConnection.endBatchEdit();
         }
@@ -2279,6 +2289,8 @@ public final class InputLogic {
      * @param alsoResetLastComposedWord whether to also reset the last composed word.
      */
     private void resetComposingState(final boolean alsoResetLastComposedWord) {
+        // The pin only protects the word currently being composed.
+        mHasPinnedCycledWord = false;
         mWordComposer.reset();
         if (alsoResetLastComposedWord) {
             mLastComposedWord = LastComposedWord.NOT_A_COMPOSED_WORD;

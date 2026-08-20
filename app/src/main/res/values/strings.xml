@@ -924,6 +924,7 @@ New dictionary:
     <string name="space_swipe_insert_space_entry">Insert space</string>
     <string name="swipe_cycle_suggestion_next_entry">Next suggestion</string>
     <string name="swipe_cycle_suggestion_prev_entry">Previous suggestion</string>
+    <string name="dynamic_touch_zones">Dynamic touch zones</string>
     <string name="letter_swipe">Letter swipe gestures</string>
     <string name="letter_swipe_left">Letter swipe: left</string>
     <string name="letter_swipe_right">Letter swipe: right</string>

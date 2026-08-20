@@ -294,6 +294,11 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         return Constants.isValidCoordinate(y) ? mKeyDetector.getTouchY(y) : y;
     }
 
+    /** Forwards the predicted next-letter distribution to the key detector. */
+    public void setNextLetterBias(final android.util.SparseArray<Float> bias) {
+        mKeyDetector.setNextLetterBias(bias);
+    }
+
     /**
      * Attaches a keyboard to this view. The keyboard can be switched at any time and the
      * view will re-layout itself to accommodate the keyboard.

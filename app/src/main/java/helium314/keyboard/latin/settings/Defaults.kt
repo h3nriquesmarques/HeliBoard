@@ -107,6 +107,7 @@ object Defaults {
     val PREF_SPACE_VERTICAL_SWIPE = KeyboardActionListener.SwipeAction.NONE.name
     const val PREF_DELETE_SWIPE = true
     const val PREF_LETTER_SWIPE = false
+    const val PREF_DYNAMIC_TOUCH_ZONES = false
     @JvmField
     val PREF_LETTER_SWIPE_LEFT = KeyboardActionListener.SwipeAction.DELETE_WORD.name
     @JvmField
