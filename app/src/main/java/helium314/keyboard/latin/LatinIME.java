@@ -1501,7 +1501,12 @@ public class LatinIME extends InputMethodService implements
             return;
         }
         final int typedLength = mInputLogic.getComposingLength();
-        if (typedLength <= 0 || suggestedWords == null || suggestedWords.isEmpty()) {
+        // typedLength 0 is the start of a word, where the suggestions are next-word
+        // predictions: their first letter is exactly the prediction wanted. Testing showed
+        // this is where dynamic zones were missing most, since short words like "um" and "o"
+        // are highly predictable from context yet got no help at all.
+        if (typedLength < 0 || suggestedWords == null || suggestedWords.isEmpty()
+                || suggestedWords.isPunctuationSuggestions()) {
             keyboardView.setNextLetterBias(null);
             return;
         }
