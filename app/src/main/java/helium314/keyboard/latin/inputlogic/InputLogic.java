@@ -1992,6 +1992,18 @@ public final class InputLogic {
      *
      * @return false if there is nothing to reopen, in which case nothing was changed.
      */
+    /**
+     * The word as the user typed it, when the committed word differs because it was
+     * autocorrected. Null when nothing was corrected.
+     *
+     * Captured before reopening, since reopening resets the composing state and loses it.
+     */
+    public String correctedFromTypedWord() {
+        if (!mLastComposedWord.canRevertCommit()) return null;
+        final String typed = mLastComposedWord.mTypedWord;
+        return TextUtils.isEmpty(typed) ? null : typed;
+    }
+
     public boolean reopenLastWordForCycling(final SettingsValues settingsValues, final String script) {
         if (mWordComposer.isComposingWord()) return false;
         if (mConnection.hasSelection()) return false;

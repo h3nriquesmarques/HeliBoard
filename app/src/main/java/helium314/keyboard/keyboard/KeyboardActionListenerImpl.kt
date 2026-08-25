@@ -296,6 +296,8 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
 
     /** Set while waiting for the suggestions of a word just reopened by a swipe up. */
     private var awaitingReopenCorrection = false
+    /** What the user typed before autocorrection replaced it, when reopening such a word. */
+    private var pendingTypedWord: String? = null
 
     /**
      * Called when fresh suggestions arrive, so a reopened word can be corrected as soon as
@@ -312,9 +314,21 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
         // A reopened word has no pending autocorrection, so the centre slot holds the word
         // as written -- the wrong one, since that is why the user swiped back. Take the best
         // candidate that actually differs from it: that is the correction being asked for.
-        val best = (0 until words.size())
-            .mapNotNull { words.getInfo(it) }
-            .firstOrNull { it.mWord != null && it.mWord.isNotEmpty() && it.mWord != composing && !it.isEmoji }
+        val typedBeforeCorrection = pendingTypedWord
+        pendingTypedWord = null
+        // Reopening leaves no pending autocorrection, so the centre slot is only decorative:
+        // a separator would commit the word as written no matter what the strip shows. A
+        // candidate has to be pinned explicitly, and which one depends on why the user swiped.
+        val best = if (typedBeforeCorrection != null && typedBeforeCorrection != composing) {
+            // The word had been autocorrected: the swipe means "undo that", so hand back
+            // exactly what was typed instead of offering yet another suggestion.
+            (0 until words.size()).mapNotNull { words.getInfo(it) }
+                .firstOrNull { it.mWord == typedBeforeCorrection }
+        } else {
+            // Nothing was corrected: the swipe means "this is wrong, fix it".
+            (0 until words.size()).mapNotNull { words.getInfo(it) }
+                .firstOrNull { it.mWord != null && it.mWord.isNotEmpty() && it.mWord != composing && !it.isEmoji }
+        }
         if (best == null) {
             // Genuinely nothing to fix; leave the word open for editing.
             cycleIndex = (DEFAULT_SUGGESTIONS_IN_STRIP / 2).coerceAtMost(list.size - 1)
@@ -328,6 +342,7 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
 
     internal fun resetSuggestionCycle() {
         awaitingReopenCorrection = false
+        pendingTypedWord = null
         cycleList = emptyList()
         cycleIndex = 0
     }
@@ -373,6 +388,9 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
             // reopens it for editing instead of doing nothing. Same gesture, decided by
             // context -- cycle while writing, reopen right after committing.
             if (delta < 0 && inputLogic.composingWordOrNull() == null) {
+                // Captured before reopening, which resets the composing state: if the word had
+                // been autocorrected, what the user wants back is what they actually typed.
+                pendingTypedWord = inputLogic.correctedFromTypedWord()
                 if (!inputLogic.reopenLastWordForCycling(settings.current, keyboardSwitcher.currentKeyboardScript))
                     return false
                 // The word is reopened exactly as it was written -- which is the wrong word,
