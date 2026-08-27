@@ -18,6 +18,7 @@ import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.define.DecoderSpecificConstants.SHOULD_AUTO_CORRECT_USING_NON_WHITE_LISTED_SUGGESTION
 import helium314.keyboard.latin.define.DecoderSpecificConstants.SHOULD_REMOVE_PREVIOUSLY_REJECTED_SUGGESTION
 import helium314.keyboard.latin.dictionary.Dictionary
+import helium314.keyboard.latin.utils.RejectedSuggestions
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.settings.SettingsValuesForSuggestion
 import helium314.keyboard.latin.suggestions.SuggestionStripView
@@ -36,6 +37,12 @@ import kotlin.math.min
  * characters. This includes corrections and completions.
  */
 class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
+
+    /**
+     * Set once by LatinIME. Suggest itself has no Context, and rejections have to be read from
+     * storage during ranking.
+     */
+    var appContext: android.content.Context? = null
     private var mAutoCorrectionThreshold = 0f
     private val mPlausibilityThreshold = 0f
     private val nextWordSuggestionsCache = HashMap<NgramContext, SuggestionResults>()
@@ -86,6 +93,7 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         if (!resultsArePredictions && typedWordString.isNotEmpty()) {
             rerankByContext(suggestionsContainer, ngramContext, keyboard, inputStyleIfNotPrediction, settingsValuesForSuggestion)
             rerankByPersonalVocabulary(suggestionsContainer)
+            demoteRejected(suggestionsContainer)
         }
         val capitalizedTypedWord = capitalize(typedWordString, capsMode, mDictionaryFacilitator.mainLocale)
 
@@ -460,6 +468,37 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         if (changed) suggestions.sortByDescending { it.mScore }
     }
 
+    /**
+     * Pushes down suggestions the user has previously rejected.
+     *
+     * Words from the built-in dictionary cannot be unlearned -- it is a read-only binary -- so
+     * a suggestion the user keeps refusing would otherwise keep coming back forever. The
+     * penalty grows with the number of rejections rather than removing the word outright,
+     * because a rejection is situational: refusing "Deus" in one sentence says nothing about
+     * the next, and typing the word on purpose clears the count.
+     */
+    private fun demoteRejected(suggestions: ArrayList<SuggestedWordInfo>) {
+        if (suggestions.size < 2) return
+        val rejected = RejectedSuggestions.all(appContext ?: return)
+        if (rejected.isEmpty()) return
+
+        val topScore = suggestions.maxOf { it.mScore }
+        if (topScore <= 0) return
+        var changed = false
+        for (i in suggestions.indices) {
+            val info = suggestions[i]
+            val count = rejected[info.mWord?.lowercase()] ?: continue
+            if (count <= 0) continue
+            val penalty = topScore.toLong() * REJECTION_PENALTY_PER_COUNT * count / 100
+            val demoted = (info.mScore.toLong() - penalty).coerceAtLeast(Int.MIN_VALUE.toLong() + 1)
+            suggestions[i] = SuggestedWordInfo(info.mWord, info.mPrevWordsContext, demoted.toInt(),
+                info.mKindAndFlags, info.mSourceDict, info.mIndexOfTouchPointOfSecondWord,
+                info.mAutoCommitFirstWordConfidence)
+            changed = true
+        }
+        if (changed) suggestions.sortByDescending { it.mScore }
+    }
+
     private fun getNextWordSuggestions(ngramContext: NgramContext, keyboard: Keyboard, inputStyle: Int,
                                        settingsValuesForSuggestion: SettingsValuesForSuggestion): SuggestionResults {
         val cachedResults = nextWordSuggestionsCache[ngramContext]
@@ -481,6 +520,8 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         private const val PERSONAL_USED_BONUS = 25
         /** Bonus for a personal-dictionary word not yet seen in typing. */
         private const val PERSONAL_DECLARED_BONUS = 12
+        /** Penalty per recorded rejection, as a percentage of the leading candidate's score. */
+        private const val REJECTION_PENALTY_PER_COUNT = 30
 
         // Session id for {@link #getSuggestedWords(WordComposer,String,ProximityInfo,boolean,int)}.
         // We are sharing the same ID between typing and gesture to save RAM footprint.

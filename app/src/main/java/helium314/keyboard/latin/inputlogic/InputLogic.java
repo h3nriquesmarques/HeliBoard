@@ -48,6 +48,7 @@ import helium314.keyboard.latin.SuggestedWords;
 import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo;
 import helium314.keyboard.latin.WordComposer;
 import helium314.keyboard.latin.common.Constants;
+import helium314.keyboard.latin.utils.RejectedSuggestions;
 import helium314.keyboard.latin.common.InputPointers;
 import helium314.keyboard.latin.common.StringUtils;
 import helium314.keyboard.latin.common.StringUtilsKt;
@@ -105,6 +106,7 @@ public final class InputLogic {
         if (mDictionaryFacilitator == facilitator) return;
         mDictionaryFacilitator = facilitator;
         mSuggest = new Suggest(mDictionaryFacilitator);
+        if (mLatinIME != null) mSuggest.setAppContext(mLatinIME.getApplicationContext());
     }
 
     public LastComposedWord mLastComposedWord = LastComposedWord.NOT_A_COMPOSED_WORD;
@@ -150,6 +152,7 @@ public final class InputLogic {
         mConnection = new RichInputConnection(latinIME);
         mInputLogicHandler = new InputLogicHandler(mLatinIME.mHandler, this);
         mSuggest = new Suggest(dictionaryFacilitator);
+        mSuggest.setAppContext(latinIME.getApplicationContext());
         mDictionaryFacilitator = dictionaryFacilitator;
     }
 
@@ -1501,6 +1504,13 @@ public final class InputLogic {
             final String wordBeingDeleted = getWordAtCursor(settingsValues, currentKeyboardScript);
             if (!TextUtils.isEmpty(wordBeingDeleted)) {
                 unlearnWord(wordBeingDeleted, settingsValues, DictionaryFacilitator.UnlearnEvent.BACKSPACE);
+                // Deleting a word the keyboard had corrected says the correction was unwanted.
+                // Words the user typed themselves are left alone: deleting those usually means
+                // rewriting the sentence, not refusing a suggestion.
+                if (mLastComposedWord.canRevertCommit()
+                        && TextUtils.equals(wordBeingDeleted, mLastComposedWord.mCommittedWord)) {
+                    rejectSuggestion(wordBeingDeleted);
+                }
                 return true;
             }
         }
@@ -2023,6 +2033,24 @@ public final class InputLogic {
         return mWordComposer.isComposingWord();
     }
 
+    /**
+     * Records that the user pushed a suggestion away, so ranking stops offering it.
+     *
+     * Separate from unlearnFromUserHistory, which can only weaken words the history dictionary
+     * learned: a suggestion coming from the built-in dictionary cannot be unlearned at all, and
+     * without this would keep reappearing however often it is refused.
+     */
+    public void rejectSuggestion(final CharSequence word) {
+        if (TextUtils.isEmpty(word) || mLatinIME == null) return;
+        RejectedSuggestions.INSTANCE.reject(mLatinIME.getApplicationContext(), word.toString());
+    }
+
+    /** Clears a word's rejections: typing it on purpose overrides earlier refusals. */
+    private void acceptSuggestion(final CharSequence word) {
+        if (TextUtils.isEmpty(word) || mLatinIME == null) return;
+        RejectedSuggestions.INSTANCE.accept(mLatinIME.getApplicationContext(), word.toString());
+    }
+
     /** True when there is a word that suggestion cycling could replace. */
     public boolean hasReplaceableWord() {
         return mWordComposer.isComposingWord() || mLastComposedWord.canRevertCommit();
@@ -2030,6 +2058,7 @@ public final class InputLogic {
 
     public boolean revertLastAutocorrect(final SettingsValues settingsValues, final CapsMode keyboardCapsMode) {
         if (!mLastComposedWord.canRevertCommit()) return false;
+        rejectSuggestion(mLastComposedWord.mCommittedWord);
         if (mWordComposer.isComposingWord()) return false;
         final InputTransaction inputTransaction = new InputTransaction(settingsValues,
                 Event.createSoftwareKeypressEvent(KeyCode.DELETE, 0,
@@ -2559,6 +2588,9 @@ public final class InputLogic {
      */
     private void commitChosenWord(final SettingsValues settingsValues, final String chosenWord,
             final int commitType, final String separatorString) {
+        // Deliberate use overrides earlier refusals of the same word: a rejection is
+        // situational, and typing the word on purpose is the strongest signal against it.
+        acceptSuggestion(chosenWord);
         long startTimeMillis = 0;
         if (DebugFlags.DEBUG_ENABLED) {
             startTimeMillis = SystemClock.elapsedRealtime();
