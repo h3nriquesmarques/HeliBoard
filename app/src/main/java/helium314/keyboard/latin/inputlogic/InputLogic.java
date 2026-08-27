@@ -14,6 +14,7 @@ import android.os.SystemClock;
 import android.text.InputType;
 import android.text.SpannableString;
 import android.text.Spanned;
+import android.content.Context;
 import android.text.TextUtils;
 import android.text.style.BackgroundColorSpan;
 import android.text.style.SuggestionSpan;
@@ -106,7 +107,6 @@ public final class InputLogic {
         if (mDictionaryFacilitator == facilitator) return;
         mDictionaryFacilitator = facilitator;
         mSuggest = new Suggest(mDictionaryFacilitator);
-        if (mLatinIME != null) mSuggest.setAppContext(mLatinIME.getApplicationContext());
     }
 
     public LastComposedWord mLastComposedWord = LastComposedWord.NOT_A_COMPOSED_WORD;
@@ -152,7 +152,6 @@ public final class InputLogic {
         mConnection = new RichInputConnection(latinIME);
         mInputLogicHandler = new InputLogicHandler(mLatinIME.mHandler, this);
         mSuggest = new Suggest(dictionaryFacilitator);
-        mSuggest.setAppContext(latinIME.getApplicationContext());
         mDictionaryFacilitator = dictionaryFacilitator;
     }
 
@@ -2040,15 +2039,28 @@ public final class InputLogic {
      * learned: a suggestion coming from the built-in dictionary cannot be unlearned at all, and
      * without this would keep reappearing however often it is refused.
      */
+    /**
+     * Resolved lazily: a Service has no usable Context until onCreate, so asking for it in the
+     * constructor returns null and takes the whole keyboard down on startup.
+     */
+    private Context rejectionContext() {
+        if (mLatinIME == null) return null;
+        final Context context = mLatinIME.getApplicationContext();
+        if (context != null && mSuggest != null) mSuggest.setAppContext(context);
+        return context;
+    }
+
     public void rejectSuggestion(final CharSequence word) {
-        if (TextUtils.isEmpty(word) || mLatinIME == null) return;
-        RejectedSuggestions.INSTANCE.reject(mLatinIME.getApplicationContext(), word.toString());
+        final Context context = rejectionContext();
+        if (TextUtils.isEmpty(word) || context == null) return;
+        RejectedSuggestions.INSTANCE.reject(context, word.toString());
     }
 
     /** Clears a word's rejections: typing it on purpose overrides earlier refusals. */
     private void acceptSuggestion(final CharSequence word) {
-        if (TextUtils.isEmpty(word) || mLatinIME == null) return;
-        RejectedSuggestions.INSTANCE.accept(mLatinIME.getApplicationContext(), word.toString());
+        final Context context = rejectionContext();
+        if (TextUtils.isEmpty(word) || context == null) return;
+        RejectedSuggestions.INSTANCE.accept(context, word.toString());
     }
 
     /** True when there is a word that suggestion cycling could replace. */

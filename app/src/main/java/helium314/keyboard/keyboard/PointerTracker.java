@@ -170,7 +170,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     // true if a keyswipe gesture is enabled and warranted.
     private boolean mKeySwipeAllowed = false;
     private boolean mLetterSwipeFired = false;
-    private static final int sLetterSwipeThreshold = KtxKt.dpToPx(28, Resources.getSystem());
+    private static final int sLetterSwipeThreshold = KtxKt.dpToPx(22, Resources.getSystem());
     private static boolean sInKeySwipe = false;
 
     // Touchpad mode for cursor control
