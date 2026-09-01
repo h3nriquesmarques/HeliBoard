@@ -108,6 +108,21 @@ digitação inteira — tratar como parâmetro sensível, não como constante li
 1. Reranking neural para melhorar qualidade dos candidatos em português.
    Prioridade. Hoje o 4º candidato frequentemente vem lixo.
 2. Dwell gate para conviver com swipe typing. Baixa prioridade.
+   Tentativa em 2026-09-01: gate baseado em stillness-radius (6dp) para
+   decidir entre key-swipe e gesture typing. **Não funcionou, revertido.**
+   Causa: a lógica ficou invertida. Um swipe de letra de verdade exige
+   bastante movimento (threshold de 22dp) para disparar, mas o gate cedia
+   para gesture typing assim que o dedo passava de 6dp — ou seja, qualquer
+   swipe intencional já ultrapassava o raio de "parado" no primeiro evento
+   de movimento e nunca chegava a committar como key-swipe. Resultado:
+   quebrou tanto o swipe de letra quanto o próprio gesture typing (que
+   também não juntava pontos suficientes num toque que cedia cedo demais).
+   Não repetir essa abordagem de stillness-radius. Próxima tentativa deveria
+   distinguir os dois casos por outro sinal — ex.: manter-se dentro da área
+   da tecla inicial vs. cruzar para uma tecla vizinha — mas note que a
+   amplitude de um flick de letra (~22dp) já é comparável à distância até a
+   tecla vizinha, então isso também precisa de validação cuidadosa no
+   aparelho antes de assumir que resolve.
 3. Possível ajuste do limiar de 28dp.
 4. `fix_skip_emoji.py` foi gerado mas **não** aplicado. Deliberado. Não aplicar
    sem pedido explícito.
