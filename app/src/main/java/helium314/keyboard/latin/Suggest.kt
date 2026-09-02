@@ -13,6 +13,7 @@ import helium314.keyboard.latin.SuggestedWords.SuggestedWordInfo
 import helium314.keyboard.latin.common.ComposedData
 import helium314.keyboard.latin.common.Constants
 import helium314.keyboard.latin.common.InputPointers
+import android.util.LruCache
 import helium314.keyboard.latin.common.StringUtils
 import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.define.DecoderSpecificConstants.SHOULD_AUTO_CORRECT_USING_NON_WHITE_LISTED_SUGGESTION
@@ -45,10 +46,18 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
     var appContext: android.content.Context? = null
     private var mAutoCorrectionThreshold = 0f
     private val mPlausibilityThreshold = 0f
-    private val nextWordSuggestionsCache = HashMap<NgramContext, SuggestionResults>()
+    /**
+     * Bounded so a long editing session cannot grow it without limit: each entry holds a full
+     * SuggestionResults, and previously this only shrank when the whole cache was dropped.
+     *
+     * It is still cleared on settings changes. Keeping entries across those would preserve
+     * predictions computed for another language or layout, which is worse than recomputing.
+     */
+    private val nextWordSuggestionsCache =
+        object : LruCache<NgramContext, SuggestionResults>(NEXT_WORD_CACHE_SIZE) {}
 
     // cache cleared whenever LatinIME.loadSettings is called, notably on changing layout and switching input fields
-    fun clearNextWordSuggestionsCache() = nextWordSuggestionsCache.clear()
+    fun clearNextWordSuggestionsCache() = nextWordSuggestionsCache.evictAll()
 
     /**
      * Set the normalized-score threshold for a suggestion to be considered strong enough that we
@@ -501,11 +510,11 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
 
     private fun getNextWordSuggestions(ngramContext: NgramContext, keyboard: Keyboard, inputStyle: Int,
                                        settingsValuesForSuggestion: SettingsValuesForSuggestion): SuggestionResults {
-        val cachedResults = nextWordSuggestionsCache[ngramContext]
+        val cachedResults = nextWordSuggestionsCache.get(ngramContext)
         if (cachedResults != null) return cachedResults
         val newResults = mDictionaryFacilitator.getSuggestionResults(ComposedData(InputPointers(1),
             false, ""), ngramContext, keyboard, settingsValuesForSuggestion, SESSION_ID_TYPING, inputStyle)
-        nextWordSuggestionsCache[ngramContext] = newResults
+        nextWordSuggestionsCache.put(ngramContext, newResults)
         return newResults
     }
 
@@ -522,6 +531,8 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         private const val PERSONAL_DECLARED_BONUS = 12
         /** Penalty per recorded rejection, as a percentage of the leading candidate's score. */
         private const val REJECTION_PENALTY_PER_COUNT = 30
+        /** Enough for normal typing; each entry holds a full SuggestionResults. */
+        private const val NEXT_WORD_CACHE_SIZE = 50
 
         // Session id for {@link #getSuggestedWords(WordComposer,String,ProximityInfo,boolean,int)}.
         // We are sharing the same ID between typing and gesture to save RAM footprint.

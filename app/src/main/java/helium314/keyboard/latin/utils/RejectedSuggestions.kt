@@ -24,43 +24,59 @@ object RejectedSuggestions {
 
     private var prefs: SharedPreferences? = null
 
+    /**
+     * In-memory mirror of the stored counts.
+     *
+     * Ranking asks for the whole set on every keystroke, and reading SharedPreferences there
+     * means touching disk in the hot path. The map is small (only rejected words) and this is
+     * the single writer, so it can simply be kept in sync on every change.
+     */
+    @Volatile private var cache: Map<String, Int>? = null
+
     private fun prefs(context: Context): SharedPreferences =
         prefs ?: context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .also { prefs = it }
+
+    private fun cached(context: Context): Map<String, Int> {
+        cache?.let { return it }
+        @Suppress("UNCHECKED_CAST")
+        val loaded = prefs(context).all
+            .mapNotNull { (k, v) -> (v as? Int)?.let { k to it } }
+            .toMap()
+        cache = loaded
+        return loaded
+    }
 
     /** Records that the user pushed this suggestion away. */
     fun reject(context: Context, word: String) {
         if (word.isBlank()) return
         val key = key(word)
         val store = prefs(context)
-        val count = store.getInt(key, 0)
+        val count = cached(context)[key] ?: 0
         if (count >= MAX_COUNT) return
+        cache = cached(context) + (key to count + 1)
         store.edit().putInt(key, count + 1).apply()
     }
 
     /** Clears a word's rejections, called when the user types it deliberately. */
     fun accept(context: Context, word: String) {
         if (word.isBlank()) return
-        val store = prefs(context)
         val key = key(word)
-        if (!store.contains(key)) return
-        store.edit().remove(key).apply()
+        if (!cached(context).containsKey(key)) return
+        cache = cached(context) - key
+        prefs(context).edit().remove(key).apply()
     }
 
     /** 0 when never rejected, up to MAX_COUNT. */
     fun rejectionCount(context: Context, word: String): Int =
-        if (word.isBlank()) 0 else prefs(context).getInt(key(word), 0)
+        if (word.isBlank()) 0 else cached(context)[key(word)] ?: 0
 
     /** Snapshot of every rejected word, for ranking without a lookup per candidate. */
-    fun all(context: Context): Map<String, Int> {
-        @Suppress("UNCHECKED_CAST")
-        return prefs(context).all
-            .mapNotNull { (k, v) -> (v as? Int)?.let { k to it } }
-            .toMap()
-    }
+    fun all(context: Context): Map<String, Int> = cached(context)
 
     fun clear(context: Context) {
+        cache = emptyMap()
         prefs(context).edit().clear().apply()
     }
 
