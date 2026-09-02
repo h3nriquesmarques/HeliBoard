@@ -22,7 +22,6 @@ import android.os.Bundle;
 import android.os.Debug;
 import android.os.Message;
 import android.os.Process;
-import android.util.Log;
 import android.util.PrintWriterPrinter;
 import android.util.SparseArray;
 import android.util.Printer;

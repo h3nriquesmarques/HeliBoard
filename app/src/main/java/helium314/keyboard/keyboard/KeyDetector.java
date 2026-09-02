@@ -17,7 +17,7 @@ public class KeyDetector {
      * point towards itself. Deliberately small: this changes which character is committed,
      * so an over-eager bias types the wrong letter outright instead of merely mis-suggesting.
      */
-    private static final float DYNAMIC_ZONE_MAX_SHIFT_RATIO = 0.22f;
+    private static final float DYNAMIC_ZONE_MAX_SHIFT_RATIO = 0.30f;
     /** Minimum probability advantage before a neighbour is allowed to win at all. */
     private static final float DYNAMIC_ZONE_MIN_ADVANTAGE = 0.15f;
 
