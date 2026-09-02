@@ -22,6 +22,7 @@ import android.os.Bundle;
 import android.os.Debug;
 import android.os.Message;
 import android.os.Process;
+import android.util.Log;
 import android.util.PrintWriterPrinter;
 import android.util.SparseArray;
 import android.util.Printer;
@@ -1493,6 +1494,31 @@ public class LatinIME extends InputMethodService implements
      * keystroke anyway, and the character each one has at the position the user is about to
      * type is exactly the prediction wanted. No extra dictionary lookup, no extra latency.
      */
+    /**
+     * Logs the predicted next letters and how confident the prediction is.
+     *
+     * The effect of dynamic zones is invisible by design -- it prevents mistakes that never
+     * happen -- so this makes it observable: if the top letter rarely clears the advantage
+     * threshold, the zones are not acting at all and no amount of calibration will help.
+     */
+    private void logNextLetterBias(final SparseArray<Float> bias) {
+        float best = 0f, second = 0f;
+        int bestChar = 0;
+        for (int i = 0; i < bias.size(); i++) {
+            final float value = bias.valueAt(i);
+            if (value > best) {
+                second = best;
+                best = value;
+                bestChar = bias.keyAt(i);
+            } else if (value > second) {
+                second = value;
+            }
+        }
+        Log.d(TAG, "next letter bias: '" + (char) bestChar + "' " + String.format("%.2f", best)
+                + ", advantage " + String.format("%.2f", best - second)
+                + " over " + bias.size() + " letters");
+    }
+
     private void updateNextLetterBias(final SuggestedWords suggestedWords) {
         final MainKeyboardView keyboardView = mKeyboardSwitcher.getMainKeyboardView();
         if (keyboardView == null) return;
@@ -1513,6 +1539,15 @@ public class LatinIME extends InputMethodService implements
         final SparseArray<Float> weights = new SparseArray<>();
         float total = 0f;
         final int count = Math.min(suggestedWords.size(), NEXT_LETTER_CANDIDATES);
+        // Weight by score relative to the leader rather than by rank. Rank weighting gave the
+        // second candidate half the weight of the first regardless of how far behind it was,
+        // which flattened clear winners and left no candidate with enough advantage to move a
+        // touch zone at all.
+        int topScore = 0;
+        for (int i = 0; i < count; i++) {
+            final SuggestedWords.SuggestedWordInfo info = suggestedWords.getInfo(i);
+            if (info != null && info.mScore > topScore) topScore = info.mScore;
+        }
         for (int i = 0; i < count; i++) {
             final SuggestedWords.SuggestedWordInfo info = suggestedWords.getInfo(i);
             if (info == null) continue;
@@ -1520,9 +1555,10 @@ public class LatinIME extends InputMethodService implements
             if (word == null || word.length() <= typedLength) continue;
             final char next = Character.toLowerCase(word.charAt(typedLength));
             if (!Character.isLetter(next)) continue;
-            // Rank-based weight: the exact scores come from different scales, and only the
-            // relative ordering is meaningful here.
-            final float weight = 1f / (i + 1);
+            final float weight = topScore > 0
+                    ? Math.max(info.mScore, 0) / (float) topScore
+                    : 1f / (i + 1); // scores unusable, fall back to rank
+            if (weight <= 0f) continue;
             weights.put(next, weights.get(next, 0f) + weight);
             total += weight;
         }
@@ -1534,6 +1570,7 @@ public class LatinIME extends InputMethodService implements
         for (int i = 0; i < weights.size(); i++) {
             normalized.put(weights.keyAt(i), weights.valueAt(i) / total);
         }
+        if (DebugFlags.DEBUG_ENABLED) logNextLetterBias(normalized);
         keyboardView.setNextLetterBias(normalized);
     }
 
