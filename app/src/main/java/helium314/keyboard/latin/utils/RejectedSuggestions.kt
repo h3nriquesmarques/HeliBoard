@@ -68,6 +68,21 @@ object RejectedSuggestions {
         prefs(context).edit().remove(key).apply()
     }
 
+    /**
+     * Records that [chosen] was picked in place of [replaced].
+     *
+     * Modelled on Kinetica's correction strip, where replacing a committed word transfers the
+     * weight: the replacement earns what the replaced word gives back. Doing both in one step
+     * is more truthful than an isolated penalty, because the user did not merely refuse a
+     * word, they said which one belonged there instead.
+     */
+    fun replace(context: Context, replaced: String, chosen: String) {
+        if (replaced.isBlank() || chosen.isBlank()) return
+        if (key(replaced) == key(chosen)) return
+        reject(context, replaced)
+        accept(context, chosen)
+    }
+
     /** 0 when never rejected, up to MAX_COUNT. */
     fun rejectionCount(context: Context, word: String): Int =
         if (word.isBlank()) 0 else cached(context)[key(word)] ?: 0

@@ -1970,6 +1970,10 @@ public final class InputLogic {
         if (!mWordComposer.isComposingWord()) return false;
         if (chosen == null || TextUtils.isEmpty(chosen.mWord)) return false;
         final String word = chosen.mWord;
+        // Cycling away from a candidate is a replacement, not just a refusal: the user said
+        // which word belonged there instead. Transfer the weight rather than only penalising.
+        final String replaced = mWordComposer.getTypedWord();
+        if (!TextUtils.isEmpty(replaced)) transferSuggestionWeight(replaced, word);
         mConnection.beginBatchEdit();
         try {
             mWordComposer.setBatchInputWord(word);
@@ -2048,6 +2052,13 @@ public final class InputLogic {
         final Context context = mLatinIME.getApplicationContext();
         if (context != null && mSuggest != null) mSuggest.setAppContext(context);
         return context;
+    }
+
+    /** Moves rejection weight from a word the user cycled away from to the one they chose. */
+    private void transferSuggestionWeight(final CharSequence replaced, final CharSequence chosen) {
+        final Context context = rejectionContext();
+        if (context == null) return;
+        RejectedSuggestions.INSTANCE.replace(context, replaced.toString(), chosen.toString());
     }
 
     public void rejectSuggestion(final CharSequence word) {

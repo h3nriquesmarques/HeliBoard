@@ -14,6 +14,7 @@ import helium314.keyboard.latin.common.ComposedData
 import helium314.keyboard.latin.common.Constants
 import helium314.keyboard.latin.common.InputPointers
 import android.util.LruCache
+import kotlin.math.ln
 import helium314.keyboard.latin.common.StringUtils
 import helium314.keyboard.latin.define.DebugFlags
 import helium314.keyboard.latin.define.DecoderSpecificConstants.SHOULD_AUTO_CORRECT_USING_NON_WHITE_LISTED_SUGGESTION
@@ -521,7 +522,13 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
             val info = suggestions[i]
             val count = rejected[info.mWord?.lowercase()] ?: continue
             if (count <= 0) continue
-            val penalty = topScore.toLong() * REJECTION_PENALTY_PER_COUNT * count / 100
+            // Logarithmic rather than linear, following Kinetica's personal weighting: the
+            // first rejection should move the word noticeably while later ones add less and
+            // less, so a word refused many times in one situation is not buried for good.
+            // ln(1+1)=0.69 for one rejection, ln(1+4)=1.61 for four -- a bit over twice the
+            // effect for four times the rejections.
+            val penalty = (topScore.toLong() * REJECTION_PENALTY_PER_COUNT *
+                ln(1.0 + count) / 100).toLong()
             val demoted = (info.mScore.toLong() - penalty).coerceAtLeast(Int.MIN_VALUE.toLong() + 1)
             suggestions[i] = SuggestedWordInfo(info.mWord, info.mPrevWordsContext, demoted.toInt(),
                 info.mKindAndFlags, info.mSourceDict, info.mIndexOfTouchPointOfSecondWord,
@@ -552,8 +559,11 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         private const val PERSONAL_USED_BONUS = 25
         /** Bonus for a personal-dictionary word not yet seen in typing. */
         private const val PERSONAL_DECLARED_BONUS = 12
-        /** Penalty per recorded rejection, as a percentage of the leading candidate's score. */
-        private const val REJECTION_PENALTY_PER_COUNT = 30
+        /**
+         * Scales the logarithmic rejection penalty, as a percentage of the leading score.
+         * Higher than the old linear step because ln(2) already halves the first rejection.
+         */
+        private const val REJECTION_PENALTY_PER_COUNT = 45
         /** Enough for normal typing; each entry holds a full SuggestionResults. */
         private const val NEXT_WORD_CACHE_SIZE = 50
         /** At or above this share of the leading score, a bonus counts in full. */
