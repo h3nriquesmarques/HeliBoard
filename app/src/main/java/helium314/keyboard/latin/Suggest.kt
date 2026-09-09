@@ -386,6 +386,28 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
      * still decides, context only reshuffles candidates that were already close. Otherwise a
      * strongly predicted word could win over what the user actually typed.
      */
+    /**
+     * How much a ranking bonus should count for this candidate, from 0 to 1.
+     *
+     * Borrowed from Kinetica (GPL-3.0), which weights every multiplier by the candidate's own
+     * geometric fit so that a heavily reinforced word still cannot take a gesture it does not
+     * match: reinforcement buys ranking among plausible words, not against the shape typed.
+     *
+     * The same reasoning applies here. Our bonuses were capped as a share of the leading
+     * score, which stops any single bonus from dominating, but did nothing to stop a *poorly
+     * fitting* candidate from collecting the full bonus. Fit is approximated by the
+     * candidate's score relative to the leader, which is what is available at this level.
+     */
+    private fun fitWeight(score: Int, topScore: Int): Float {
+        if (topScore <= 0) return 0f
+        val ratio = score.toFloat() / topScore
+        return when {
+            ratio >= FIT_FULL_STRENGTH -> 1f
+            ratio <= FIT_NO_STRENGTH -> 0f
+            else -> (ratio - FIT_NO_STRENGTH) / (FIT_FULL_STRENGTH - FIT_NO_STRENGTH)
+        }
+    }
+
     private fun rerankByContext(suggestions: ArrayList<SuggestedWordInfo>, ngramContext: NgramContext,
                                 keyboard: Keyboard, inputStyle: Int,
                                 settingsValuesForSuggestion: SettingsValuesForSuggestion) {
@@ -414,8 +436,9 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
             if (rank >= CONTEXT_RERANK_CONSIDERED) continue
             // Bonus decays with rank and is capped at a fraction of the leading score, so
             // context can promote a near-miss but not overturn a clear spatial winner.
-            val bonus = (topScore.toLong() * CONTEXT_RERANK_MAX_BONUS *
+            val rawBonus = (topScore.toLong() * CONTEXT_RERANK_MAX_BONUS *
                 (CONTEXT_RERANK_CONSIDERED - rank) / CONTEXT_RERANK_CONSIDERED / 100).toInt()
+            val bonus = (rawBonus * fitWeight(info.mScore, topScore)).toInt()
             if (bonus <= 0) continue
             val boosted = info.mScore.toLong() + bonus
             suggestions[i] = SuggestedWordInfo(info.mWord, info.mPrevWordsContext,
@@ -466,7 +489,7 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
             // Personal dictionary entries carry no usage information of their own; the history
             // dictionary supplies it.
             val percent = if (info.mWord in usedWords) PERSONAL_USED_BONUS else PERSONAL_DECLARED_BONUS
-            val bonus = (topScore.toLong() * percent / 100)
+            val bonus = (topScore.toLong() * percent / 100 * fitWeight(info.mScore, topScore)).toLong()
             if (bonus <= 0) continue
             val boosted = (info.mScore.toLong() + bonus).coerceAtMost(Int.MAX_VALUE.toLong() - 1)
             suggestions[i] = SuggestedWordInfo(info.mWord, info.mPrevWordsContext, boosted.toInt(),
@@ -533,6 +556,10 @@ class Suggest(private val mDictionaryFacilitator: DictionaryFacilitator) {
         private const val REJECTION_PENALTY_PER_COUNT = 30
         /** Enough for normal typing; each entry holds a full SuggestionResults. */
         private const val NEXT_WORD_CACHE_SIZE = 50
+        /** At or above this share of the leading score, a bonus counts in full. */
+        private const val FIT_FULL_STRENGTH = 0.75f
+        /** At or below this share, a candidate is too poor a match to deserve any bonus. */
+        private const val FIT_NO_STRENGTH = 0.25f
 
         // Session id for {@link #getSuggestedWords(WordComposer,String,ProximityInfo,boolean,int)}.
         // We are sharing the same ID between typing and gesture to save RAM footprint.
