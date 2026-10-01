@@ -1,3 +1,87 @@
+> ## About this fork
+>
+> This is a personal fork of [HeliBoard](https://github.com/HeliBorg/HeliBoard). It is **not** affiliated
+> with upstream and no PR is planned — it exists because I missed
+> [Fleksy](https://en.wikipedia.org/wiki/Fleksy)'s gestures and wanted them on a keyboard that is still
+> maintained and offline. It is published in case the gesture work is useful to someone else: the notes
+> below are the parts that were not obvious, written down so nobody has to rediscover them.
+>
+> Everything here is off by default and lives behind settings. Upstream behaviour is unchanged unless you
+> turn something on.
+>
+> ### Fleksy-style gestures on letter keys
+>
+> *Settings → Advanced → "Letter swipe gestures"*, then one action per direction. Defaults:
+>
+> | Direction | Action |
+> |---|---|
+> | left | delete the previous word |
+> | right | insert a space |
+> | up | previous suggestion |
+> | down | next suggestion |
+>
+> Up/down walk the suggestion strip **without committing anything**, so the word under the cursor keeps
+> changing until you type or hit space. Swiping up when nothing is being composed reopens the last word,
+> which is how you undo an autocorrection you did not want.
+>
+> All of them are one-shot: one flick, one action, no repeat while the finger stays down. The only
+> continuous swipe is the existing one on the delete key. Horizontal and vertical are decided by which
+> axis moved more, with ties going to horizontal, so a sloppy diagonal still does something predictable.
+>
+> ### Four things that cost me time
+>
+> If you are implementing this on any AOSP-derived keyboard, these are the traps:
+>
+> 1. **The suggestion strip's visual order is not the list's index order.** The centre slot holds the
+>    autocorrection when one is pending and the typed word when none is, so index 0 is not "the one on the
+>    left". Cycling that walks indices feels random to the user. Go through
+>    `SuggestionStripLayoutHelper.getPositionInSuggestionStrip` and cycle in *visual* order, limited to the
+>    three slots actually drawn.
+> 2. **Cycling must not commit.** Committing each candidate and reverting it on the next flick works for
+>    one step and then desynchronises, because the revert path has its own idea of what the previous word
+>    was. Reuse the gesture-typing preview path instead — `WordComposer.setBatchInputWord` plus
+>    `setComposingTextInternal` — so the word is only ever composing text.
+> 3. **The candidate you pinned is overwritten on the next suggestions round.** `InputLogic` calls
+>    `setSuggestedWords` on essentially every input event and that clears `setAutoCorrection`, so the word
+>    you cycled to is silently replaced by whatever the dictionary prefers — committing with the space
+>    *key* keeps your pick while a swipe-right does not, which is a confusing bug to chase. A flag that
+>    survives until the next real keystroke fixes it.
+> 4. **A reopened word has no pending autocorrection.** When you reopen the last word, the strip's centre
+>    slot is the word itself, so a guard that compares against the centre slot concludes there is nothing
+>    to fix and does nothing. Compare against the best *differing* candidate, and when the word had been
+>    autocorrected, offer the originally typed word back.
+>
+> There is also a fast-typing guard in `PointerTracker` that suppresses swipes shortly after a keypress.
+> Letter swipes have to be excluded from it or every other flick is eaten while typing at speed.
+>
+> ### Dynamic touch zones
+>
+> *Settings → Advanced → "Dynamic touch zones"*. Key hit areas shift slightly toward the letters the
+> dictionary expects next, so a touch landing between two keys resolves to the plausible one. The bias is
+> weighted by how far ahead the leading candidate is, capped at a fraction of a key width, and only
+> applied when one neighbour is clearly favoured — it nudges ambiguous touches and leaves confident ones
+> alone. It works for the first letter of a word too, from word-start frequencies.
+>
+> Measured by typing the same sentences with it on and off: `um ninho` and `Hoje o pedido` came out
+> correct with zones on and as `HM ninho` and `Hoje i pedido` with them off.
+>
+> ### Suggestion ranking
+>
+> Aimed at Portuguese, but nothing is language-specific. Candidates are reranked by preceding-word
+> context, by whether a word is in the personal dictionary (with words that also appear in typing history
+> weighted above merely declared ones), and against words that have been rejected before — those are
+> demoted rather than deleted, because a word rejected in one sentence is often the right word in the
+> next. Context and personal bonuses are scaled down when the dictionary's own leader is far ahead, so
+> reranking only matters where the engine was unsure. Next-word lookups are cached, since they run on the
+> typing hot path.
+>
+> ### Caveats
+>
+> Tested by one person on one phone, in Portuguese. The gesture thresholds and the touch-zone shift are
+> hand-calibrated numbers, not derived from anything. Upstream HeliBoard explicitly does not accept
+> AI-assisted contributions, and this fork was written with Claude, which is one more reason it stays a
+> fork.
+
 # HeliBoard
 HeliBoard is a privacy-conscious and customizable open-source keyboard, based on AOSP / OpenBoard.
 Does not use internet permission, and thus is 100% offline.
